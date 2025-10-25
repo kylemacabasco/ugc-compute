@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createSupabaseBrowserClient, User } from '@/lib/supabase';
+import { AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -113,6 +114,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('Username cannot be empty');
       }
 
+      // Check if this is already their current username
+      if (user.username && user.username.toLowerCase() === trimmedUsername.toLowerCase()) {
+        throw new Error('This is already your current username');
+      }
+
       // Check if username is available
       const isAvailable = await checkUsernameAvailable(trimmedUsername);
       if (!isAvailable) {
@@ -163,10 +169,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Auto-authenticate when wallet connects/disconnects
+  // Auto-authenticate when wallet connects/disconnects or switches
   useEffect(() => {
-    if (connected && publicKey && !user) {
-      signInWithWallet();
+    if (connected && publicKey) {
+      const currentWalletAddress = publicKey.toBase58();
+
+      // If no user is signed in, sign them in
+      if (!user) {
+        signInWithWallet();
+      } 
+      // If user is signed in but wallet address changed (wallet switch), clear user and re-authenticate
+      else if (user.wallet_address !== currentWalletAddress) {
+        setUser(null);
+        setError(null);
+        signInWithWallet();
+      }
     } else if (!connected && user) {
       // Wallet disconnected, sign out user
       setUser(null);
