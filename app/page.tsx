@@ -1,6 +1,9 @@
+import WalletButton from "./components/WalletButton";
 
 export default function Home() {
   return (
-    <h1>Hello World</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <WalletButton />
+    </div>
   );
 }
