@@ -7,9 +7,10 @@ import { useUserProfile } from '@/app/hooks/useUserProfile';
 interface UsernameFormProps {
   isFirstTime?: boolean;
   onComplete?: () => void;
+  onSkip?: () => void;
 }
 
-export default function UsernameForm({ isFirstTime = false, onComplete }: UsernameFormProps) {
+export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }: UsernameFormProps) {
   const [username, setUsername] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,7 +125,11 @@ export default function UsernameForm({ isFirstTime = false, onComplete }: Userna
 
   // Handle skip (only for first-time users)
   const handleSkip = () => {
-    onComplete?.();
+    if (onSkip) {
+      onSkip();
+    } else {
+      onComplete?.();
+    }
   };
 
   return (

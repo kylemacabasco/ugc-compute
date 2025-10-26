@@ -77,7 +77,8 @@ export default function Home() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
         <UsernameForm 
           isFirstTime={true} 
-          onComplete={() => setShowProfile(true)} 
+          onComplete={() => {}} // Username created - user.username will be set, so they go to contract page
+          onSkip={() => setShowProfile(true)} // Skipped - go to profile page
         />
       </div>
     );
