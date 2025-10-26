@@ -156,7 +156,7 @@ export default function Home() {
               <div className="p-6">
                 {/* Contract Name */}
                 <Link href={`/contract/${contract.id}`}>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
                     {contract.name}
                   </h2>
                 </Link>
