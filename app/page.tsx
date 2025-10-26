@@ -6,38 +6,38 @@ import UserProfile from "./components/UserProfile";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { bounties } from "./data/bounties";
+import { contracts } from "./data/contracts";
 import { useState } from "react";
 
 export default function Home() {
   const { connected } = useWallet();
   const { user, loading } = useAuth();
   const [showProfile, setShowProfile] = useState(false);
-  const [selectedBounty, setSelectedBounty] = useState<number | null>(null);
+  const [selectedContract, setSelectedContract] = useState<number | null>(null);
   const [platform, setPlatform] = useState("tiktok");
   const [url, setUrl] = useState("");
 
-  const handleClaimBounty = (bountyId: number) => {
-    setSelectedBounty(bountyId);
+  const handleClaimContract = (contractId: number) => {
+    setSelectedContract(contractId);
     setUrl("");
     setPlatform("tiktok");
   };
 
   const handleSubmit = () => {
-    const bounty = bounties.find((b) => b.id === selectedBounty);
-    if (bounty && url) {
-      alert(`Submitted!\nBounty: ${bounty.name}\nPlatform: ${platform}\nURL: ${url}`);
-      setSelectedBounty(null);
+    const contract = contracts.find((c) => c.id === selectedContract);
+    if (contract && url) {
+      alert(`Submitted!\nContract: ${contract.name}\nPlatform: ${platform}\nURL: ${url}`);
+      setSelectedContract(null);
       setUrl("");
     }
   };
 
   const handleCalculate = () => {
-    const bounty = bounties.find((b) => b.id === selectedBounty);
-    if (bounty && url) {
+    const contract = contracts.find((c) => c.id === selectedContract);
+    if (contract && url) {
       // Mock calculation - in real app you'd fetch actual view count
       const mockViews = Math.floor(Math.random() * 100000) + 1000;
-      const earnings = (mockViews / 1000) * bounty.ratePer1kViews;
+      const earnings = (mockViews / 1000) * contract.ratePer1kViews;
       alert(`Estimated Earnings:\nViews: ${mockViews.toLocaleString()}\nEarnings: $${earnings.toFixed(2)}`);
     }
   };
@@ -60,7 +60,7 @@ export default function Home() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-            UGC Bounty
+            UGC Contracts
           </h1>
           <p className="text-slate-600 dark:text-slate-400 text-lg">
             Connect your wallet to get started
@@ -110,7 +110,7 @@ export default function Home() {
     );
   }
 
-  // Main app interface for authenticated users - Bounty Display
+  // Main app interface for authenticated users - Contract Display
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       {/* Header */}
@@ -119,10 +119,10 @@ export default function Home() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100">
-                UGC Bounty
+                UGC Contracts
               </h1>
               <p className="mt-2 text-slate-600 dark:text-slate-400">
-                Browse available bounties and start earning today
+                Browse available contracts and start earning today
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -146,25 +146,25 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {bounties.map((bounty) => (
+          {contracts.map((contract) => (
             <div
-              key={bounty.id}
+              key={contract.id}
               className="bg-white dark:bg-slate-900 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-800 hover:scale-105"
             >
               <div className="p-6">
-                {/* Bounty Name */}
+                {/* Contract Name */}
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
-                  {bounty.name}
+                  {contract.name}
                 </h2>
 
-                {/* Total Bounty and Rate */}
+                {/* Total Contract and Rate */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex flex-col">
                     <span className="text-sm text-slate-500 dark:text-slate-400">
-                      Total Bounty
+                      Total Contract
                     </span>
                     <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                      ${bounty.totalBounty.toLocaleString()}
+                      ${contract.totalContract.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex flex-col items-end">
@@ -172,22 +172,22 @@ export default function Home() {
                       Rate
                     </span>
                     <span className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                      ${bounty.ratePer1kViews}/1k views
+                      ${contract.ratePer1kViews}/1k views
                     </span>
                   </div>
                 </div>
 
                 {/* Description */}
                 <p className="text-slate-600 dark:text-slate-300 mb-6">
-                  {bounty.description}
+                  {contract.description}
                 </p>
 
                 {/* CTA Button */}
                 <button
-                  onClick={() => handleClaimBounty(bounty.id)}
+                  onClick={() => handleClaimContract(contract.id)}
                   className="w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold py-3 px-6 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors duration-200"
                 >
-                  Claim Bounty
+                  Claim Contract
                 </button>
               </div>
             </div>
@@ -195,16 +195,16 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Claim Bounty Modal */}
-      {selectedBounty && (
+      {/* Claim Contract Modal */}
+      {selectedContract && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
             <div className="flex justify-between items-start mb-6">
               <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                Claim Bounty
+                Claim Contract
               </h2>
               <button
-                onClick={() => setSelectedBounty(null)}
+                onClick={() => setSelectedContract(null)}
                 className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-2xl"
               >
                 ×
@@ -213,10 +213,10 @@ export default function Home() {
 
             <div className="mb-4">
               <p className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
-                {bounties.find((b) => b.id === selectedBounty)?.name}
+                {contracts.find((c) => c.id === selectedContract)?.name}
               </p>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                {bounties.find((b) => b.id === selectedBounty)?.description}
+                {contracts.find((c) => c.id === selectedContract)?.description}
               </p>
             </div>
 
