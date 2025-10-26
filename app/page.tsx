@@ -8,19 +8,20 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { contracts } from "./data/contracts";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Home() {
   const { connected } = useWallet();
   const { user, loading } = useAuth();
   const [showProfile, setShowProfile] = useState(false);
   const [selectedContract, setSelectedContract] = useState<number | null>(null);
-  const [platform, setPlatform] = useState("tiktok");
+  const [platform, setPlatform] = useState("youtube");
   const [url, setUrl] = useState("");
 
   const handleClaimContract = (contractId: number) => {
     setSelectedContract(contractId);
     setUrl("");
-    setPlatform("tiktok");
+    setPlatform("youtube");
   };
 
   const handleSubmit = () => {
@@ -154,9 +155,11 @@ export default function Home() {
             >
               <div className="p-6">
                 {/* Contract Name */}
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
-                  {contract.name}
-                </h2>
+                <Link href={`/contract/${contract.id}`}>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors">
+                    {contract.name}
+                  </h2>
+                </Link>
 
                 {/* Total Contract and Rate */}
                 <div className="flex items-center justify-between mb-4">
@@ -232,11 +235,7 @@ export default function Home() {
                   onChange={(e) => setPlatform(e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="tiktok">TikTok</option>
-                  <option value="twitter">Twitter</option>
-                  <option value="instagram">Instagram</option>
                   <option value="youtube">YouTube</option>
-                  <option value="facebook">Facebook</option>
                 </select>
               </div>
 
