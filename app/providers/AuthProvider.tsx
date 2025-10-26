@@ -6,8 +6,6 @@ import { createSupabaseBrowserClient, User } from '@/lib/supabase';
 import { AuthError } from '@supabase/supabase-js';
 import { useUserOperations } from '@/app/hooks/useUserOperations';
 
-
-
 interface AuthContextType {
   user: User | null;
   loading: boolean;
