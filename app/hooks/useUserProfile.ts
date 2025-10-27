@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useUserOperations } from './useUserOperations';
-import { createSupabaseBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export function useUserProfile() {
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const { user, setUser } = useAuth();
   const { verifyUsernameChange } = useUserOperations();
-  const supabase = createSupabaseBrowserClient();
 
   /**
    * Check if username is available
