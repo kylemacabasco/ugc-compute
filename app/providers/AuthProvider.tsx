@@ -1,10 +1,16 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { createSupabaseBrowserClient, User } from '@/lib/supabase';
-import { AuthError } from '@supabase/supabase-js';
-import { useUserOperations } from '@/app/hooks/useUserOperations';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { supabase, User } from "@/lib/supabase";
+import { AuthError } from "@supabase/supabase-js";
+import { useUserOperations } from "@/app/hooks/useUserOperations";
 
 interface AuthContextType {
   user: User | null;
@@ -26,7 +32,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { publicKey, connected } = useWallet();
-  const supabase = createSupabaseBrowserClient();
 
   // Check if user exists or create new user
   const handleUserAuth = async (walletAddress: string) => {
@@ -35,12 +40,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Check if user exists
       const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('wallet_address', walletAddress)
+        .from("users")
+        .select("*")
+        .eq("wallet_address", walletAddress)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (fetchError && fetchError.code !== "PGRST116") {
+        // PGRST116 = no rows returned
         throw fetchError;
       }
 
@@ -50,8 +56,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else {
         // Create new user
         const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert([{ wallet_address: walletAddress }])
+          .from("users")
+          .insert([
+            {
+              wallet_address: walletAddress,
+            },
+          ])
           .select()
           .single();
 
@@ -62,15 +72,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(newUser);
       }
     } catch (err) {
-      console.error('Error handling user auth:', err);
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      console.error("Error handling user auth:", err);
+      setError(err instanceof Error ? err.message : "Authentication failed");
     }
   };
 
   // Sign in with wallet
   const signInWithWallet = async () => {
     if (!publicKey || !connected) {
-      setError('Wallet not connected');
+      setError("Wallet not connected");
       return;
     }
 
@@ -81,8 +91,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const walletAddress = publicKey.toBase58();
       await handleUserAuth(walletAddress);
     } catch (err) {
-      console.error('Error signing in with wallet:', err);
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      console.error("Error signing in with wallet:", err);
+      setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setLoading(false);
     }
@@ -94,8 +104,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setError(null);
     } catch (err) {
-      console.error('Error signing out:', err);
-      setError(err instanceof Error ? err.message : 'Sign out failed');
+      console.error("Error signing out:", err);
+      setError(err instanceof Error ? err.message : "Sign out failed");
     }
   };
 
@@ -107,7 +117,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // If no user is signed in, sign them in
       if (!user) {
         signInWithWallet();
-      } 
+      }
       // If user is signed in but wallet address changed (wallet switch), clear user and re-authenticate
       else if (user.wallet_address !== currentWalletAddress) {
         setUser(null);
@@ -143,7 +153,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
