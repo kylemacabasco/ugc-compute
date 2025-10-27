@@ -21,11 +21,7 @@ create table if not exists public.contract_refs (
   ref_code   text primary key,
   contract_id uuid not null references public.contracts(id) on delete cascade,
   user_id    uuid not null references public.users(id) on delete cascade,
-<<<<<<< HEAD
   status     text not null default 'active' check (status in ('active', 'used', 'expired')),
-=======
-  status     text not null default 'active',  -- active | used | expired
->>>>>>> f3f3211 (update fixes)
   expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -42,7 +38,6 @@ create trigger trg_contract_refs_touch
 before update on public.contract_refs
 for each row execute function public.touch_updated_at();
 
-<<<<<<< HEAD
 -- Indexes for contract_refs
 create index if not exists idx_contract_refs_user     on public.contract_refs(user_id);
 create index if not exists idx_contract_refs_contract on public.contract_refs(contract_id);
@@ -55,11 +50,6 @@ create unique index if not exists ux_contract_refs_user_contract_active
 
 
 -- App_settings
-=======
-create index if not exists idx_contract_refs_user     on public.contract_refs(user_id);
-create index if not exists idx_contract_refs_contract on public.contract_refs(contract_id);
-
->>>>>>> f3f3211 (update fixes)
 create table if not exists public.app_settings (
   key text primary key,
   value text not null,
@@ -91,12 +81,8 @@ create trigger trg_deposit_cursors_touch
 before update on public.deposit_cursors
 for each row execute function public.touch_updated_at();
 
-<<<<<<< HEAD
 
 -- Deposits (main ledger table)
-=======
--- Deposits
->>>>>>> f3f3211 (update fixes)
 create table if not exists public.deposits (
   id uuid primary key default gen_random_uuid(),
 
@@ -120,11 +106,7 @@ create table if not exists public.deposits (
 
   -- Lifecycle
   status text not null check (status in ('processed','confirmed','finalized')),
-<<<<<<< HEAD
   source text not null default 'rpc' check (source in ('rpc','webhook','backfill')),
-=======
-  source text not null default 'rpc',
->>>>>>> f3f3211 (update fixes)
   memo   text,
 
   -- Linking & audit
@@ -135,32 +117,17 @@ create table if not exists public.deposits (
   asset_key text generated always as (coalesce(mint, 'SOL')) stored,
 
   created_at timestamptz not null default now(),
-<<<<<<< HEAD
   updated_at timestamptz not null default now(),
 
   -- Ensure asset_key consistency
   constraint deposits_asset_key_chk check (asset_key = coalesce(mint, 'SOL'))
 );
 
-=======
-  updated_at timestamptz not null default now()
-);
-
--- Enforce allowed sources
-alter table public.deposits
-  add constraint deposits_source_chk
-  check (source in ('rpc','webhook','backfill'));
-
->>>>>>> f3f3211 (update fixes)
 -- Uniqueness: one row per (tx, treasury, asset). We aggregate per asset in code.
 create unique index if not exists ux_deposits_tx_addr_asset
   on public.deposits (tx_sig, to_address, asset_key);
 
-<<<<<<< HEAD
 -- Helpful indexes for queries
-=======
--- Helpful indexes
->>>>>>> f3f3211 (update fixes)
 create index if not exists idx_deposits_user_id     on public.deposits (user_id);
 create index if not exists idx_deposits_to_address  on public.deposits (to_address);
 create index if not exists idx_deposits_tx_sig      on public.deposits (tx_sig);
@@ -168,7 +135,6 @@ create index if not exists idx_deposits_contract_id on public.deposits (contract
 create index if not exists idx_deposits_reference   on public.deposits (reference_code);
 create index if not exists idx_deposits_addr_slot   on public.deposits (to_address, slot desc);
 
-<<<<<<< HEAD
 -- Frontend query optimizations
 create index if not exists idx_deposits_user_created
   on public.deposits(user_id, created_at desc);
@@ -181,11 +147,6 @@ create index if not exists idx_deposits_contract_created
 alter table public.deposits enable row level security;
 
 -- RLS: Users can read their own deposits (by user_id OR by from_address)
-=======
-alter table public.deposits enable row level security;
-
--- RLS
->>>>>>> f3f3211 (update fixes)
 drop policy if exists "deposits: users read own" on public.deposits;
 create policy "deposits: users read own"
 on public.deposits for select
@@ -193,7 +154,6 @@ using (
   exists (
     select 1
     from public.users u
-<<<<<<< HEAD
     where (
       -- Match by user_id (for attributed deposits)
       (u.id = public.deposits.user_id)
@@ -208,16 +168,6 @@ using (
 );
 
 -- Touch trigger for updated_at
-=======
-    where u.id = public.deposits.user_id
-      and u.wallet_address = coalesce(
-        nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'wallet',
-        ''
-      )
-  )
-);
-
->>>>>>> f3f3211 (update fixes)
 drop trigger if exists trg_deposits_touch on public.deposits;
 create trigger trg_deposits_touch
 before update on public.deposits
@@ -275,7 +225,6 @@ end $$;
 drop trigger if exists trg_deposits_status_guard on public.deposits;
 create trigger trg_deposits_status_guard
 before update on public.deposits
-<<<<<<< HEAD
 for each row execute function public.deposits_status_guard();
 
 
@@ -324,6 +273,3 @@ from public.deposits d
 left join public.contracts c on c.id = d.contract_id
 where d.user_id is not null
 order by d.created_at desc;
-=======
-for each row execute function public.deposits_status_guard();
->>>>>>> f3f3211 (update fixes)

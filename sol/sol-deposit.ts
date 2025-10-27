@@ -32,12 +32,12 @@ function formatUiAmount(amount: bigint, decimals: number) {
   return `${neg ? "-" : ""}${intPart}${frac ? "." + frac : ""}`;
 }
 
-// extract inbound SOL + SPL transfers to target
+// Extract inbound SOL + SPL transfers to target
 function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   const out: Array<{ mint: string | null; amount: bigint; dec: number; from?: string }> = [];
   if (!tx.meta) return out;
 
-  // get account keys robustly
+  // Get account keys robustly
   const msg: any = tx.transaction.message;
   const keys: PublicKey[] =
     (msg.staticAccountKeys as PublicKey[]) ??
@@ -88,12 +88,12 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   return out;
 }
 
-// ingest one tx into public.deposits
+// Ingest one tx into public.deposits
 async function ingest(signature: string, tx: VersionedTransactionResponse, treasury: string) {
   const inbound = extractInbound(tx, new PublicKey(treasury));
   if (!inbound.length) return;
 
-  // aggregate per-asset
+  // Aggregate per-asset
   const agg = new Map<string, { mint: string | null; amount: bigint; dec: number }>();
   for (const x of inbound) {
     const key = `${x.mint ?? "SOL"}:${x.dec}`;
@@ -102,7 +102,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     else agg.set(key, { mint: x.mint, amount: x.amount, dec: x.dec });
   }
 
-  // parse memo and ref code
+  // Parse memo and ref code
   let ref: string | null = null;
   try {
     const msg: any = tx?.transaction?.message;
@@ -131,24 +131,55 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   } catch {}
 
-  // resolve contract + user via ref, else fallback by sender
+  // Resolve contract + user via ref, else fallback by sender
   let resolvedContractId: string | null = null;
   let resolvedUserId: string | null = null;
+  let refWasValid = false;
+
   if (ref) {
-    const { data: refRow, error: refErr } = await db.from("contract_refs").select("contract_id,user_id").eq("ref_code", ref).maybeSingle();
+    const { data: refRow, error: refErr } = await db
+      .from("contract_refs")
+      .select("contract_id,user_id,expires_at,status")
+      .eq("ref_code", ref)
+      .eq("status", "active")
+      .maybeSingle();
+    
     if (refErr) throw refErr;
+    
     if (refRow) {
-      resolvedContractId = refRow.contract_id ?? null;
-      resolvedUserId = refRow.user_id ?? null;
+      // Check if ref has expired
+      if (refRow.expires_at && new Date(refRow.expires_at) < new Date()) {
+        console.warn(`[deposit] Expired ref: ${ref} for tx ${signature}`);
+        // Still ingest deposit but don't link to contract
+        resolvedContractId = null;
+        resolvedUserId = refRow.user_id ?? null; // Still link to user
+      } else {
+        resolvedContractId = refRow.contract_id ?? null;
+        resolvedUserId = refRow.user_id ?? null;
+        refWasValid = true;
+      }
+    } else {
+      console.warn(`[deposit] Ref code not found or already used: ${ref} for tx ${signature}`);
     }
   }
+
+  // Fallback: resolve user by sender wallet if not resolved via ref
   if (!resolvedUserId) {
     const anyFrom = inbound.find((z) => z.from)?.from ?? null;
     if (anyFrom) {
-      const { data: uRow, error: uErr } = await db.from("users").select("id").eq("wallet_address", anyFrom).maybeSingle();
+      const { data: uRow, error: uErr } = await db
+        .from("users")
+        .select("id")
+        .eq("wallet_address", anyFrom)
+        .maybeSingle();
       if (uErr) throw uErr;
       resolvedUserId = uRow?.id ?? null;
     }
+  }
+
+  // Alert for unattributed deposits
+  if (!resolvedUserId && !resolvedContractId) {
+    console.warn(`[deposit] ⚠️  UNATTRIBUTED DEPOSIT: ${signature} - ${formatUiAmount(agg.values().next().value?.amount ?? 0n, SOL_DECIMALS)} SOL`);
   }
 
   // compute status from requested finality
@@ -178,10 +209,29 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     };
     const { error: upErr } = await db.from("deposits").upsert(row, { onConflict: "tx_sig,to_address,asset_key" });
     if (upErr) throw upErr;
+    
+    console.log(`[deposit] ✅ Ingested: ${signature} - ${ui} ${v.mint ?? 'SOL'} from ${fromMatch ?? 'unknown'} → contract: ${resolvedContractId ?? 'none'}`);
+  }
+
+  if (ref && refWasValid && resolvedContractId) {
+    const { error: markErr } = await db
+      .from("contract_refs")
+      .update({ 
+        status: "used", 
+        updated_at: new Date().toISOString() 
+      })
+      .eq("ref_code", ref)
+      .eq("status", "active"); // Only update if still active (idempotent)
+    
+    if (markErr) {
+      console.error(`[deposit] Failed to mark ref as used: ${ref}`, markErr);
+    } else {
+      console.log(`[deposit] ✅ Marked ref as used: ${ref} for contract ${resolvedContractId}`);
+    }
   }
 }
 
-// fetch signatures since cursor
+// Fetch signatures since cursor
 async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | null) {
   const out: Array<{ signature: string }> = [];
   let before: string | undefined;
@@ -207,39 +257,71 @@ async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | 
   return out.reverse();
 }
 
-// main poll loop
+// Main poll loop
 (async () => {
-  console.log("[deposit] up", { rpc: RPC, finality: GET_TX_FINALITY, treasury: TREASURY });
+  console.log("[deposit] 🚀 Starting deposit indexer", { 
+    rpc: RPC, 
+    finality: GET_TX_FINALITY, 
+    treasury: TREASURY,
+    pollInterval: `${POLL_MS}ms`
+  });
+  
   for (;;) {
     try {
-      const { data: cRow, error: cErr } = await db.from("deposit_cursors").select("last_seen_sig").eq("address", TREASURY).maybeSingle();
+      const { data: cRow, error: cErr } = await db
+        .from("deposit_cursors")
+        .select("last_seen_sig")
+        .eq("address", TREASURY)
+        .maybeSingle();
+      
       if (cErr) throw cErr;
       const cursor = cRow?.last_seen_sig ?? null;
 
       const sigs = await collectSignaturesSinceCursor(tKey, cursor);
-      if (!sigs.length) { await new Promise((r) => setTimeout(r, POLL_MS)); continue; }
+      if (!sigs.length) { 
+        await new Promise((r) => setTimeout(r, POLL_MS)); 
+        continue; 
+      }
+
+      console.log(`[deposit] 📥 Processing ${sigs.length} new signature(s)...`);
 
       for (const s of sigs) {
         let processed = false;
         try {
-          const tx = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: GET_TX_FINALITY });
-          if (tx) { await ingest(s.signature, tx, TREASURY); processed = true; }
-          else { console.warn("[deposit] unavailable at finality", s.signature); }
+          const tx = await conn.getTransaction(s.signature, { 
+            maxSupportedTransactionVersion: 0, 
+            commitment: GET_TX_FINALITY 
+          });
+          
+          if (tx) { 
+            await ingest(s.signature, tx, TREASURY); 
+            processed = true; 
+          } else { 
+            console.warn("[deposit] ⚠️  Transaction unavailable at finality", s.signature); 
+          }
         } catch (e) {
-          console.error("[deposit] get/ingest error", s.signature, e);
+          console.error("[deposit] ❌ Get/ingest error", s.signature, e);
         }
+        
         if (processed) {
-          const up = { address: TREASURY, last_seen_sig: s.signature, updated_at: new Date().toISOString() };
-          const { error: uErr } = await db.from("deposit_cursors").upsert(up, { onConflict: "address" });
+          const up = { 
+            address: TREASURY, 
+            last_seen_sig: s.signature, 
+            updated_at: new Date().toISOString() 
+          };
+          const { error: uErr } = await db
+            .from("deposit_cursors")
+            .upsert(up, { onConflict: "address" });
+          
           if (uErr) throw uErr;
         }
       }
     } catch (e) {
-      console.error("[deposit] loop error", e);
+      console.error("[deposit] ❌ Loop error", e);
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   }
 })().catch((e) => {
-  console.error(e);
+  console.error("Fatal error:", e);
   process.exit(1);
 });
