@@ -122,7 +122,7 @@ export async function POST(
       .from("submissions")
       .select("id, status")
       .eq("contract_id", contractId)
-      .eq("creator_id", user.id)
+      .eq("user_id", user.id)
       .in("status", ["pending", "approved"])
       .single();
 
@@ -174,10 +174,10 @@ export async function POST(
       .insert([
         {
           contract_id: contractId,
-          creator_id: user.id,
+          user_id: user.id,
           video_url,
           status: "approved", // Auto-approve if Gemini validates
-          validation_result: validation.explanation,
+          notes: validation.explanation,
           view_count: 0,
         },
       ])
@@ -221,7 +221,7 @@ export async function GET(
       .select(
         `
         *,
-        creator:users!submissions_creator_id_fkey(wallet_address, username)
+        user:users!user_id(wallet_address, username)
       `
       )
       .eq("contract_id", contractId)

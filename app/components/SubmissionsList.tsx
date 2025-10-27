@@ -8,9 +8,9 @@ interface Submission {
   video_url: string;
   status: string;
   view_count: number;
-  validation_result?: string;
+  notes?: string;
   created_at: string;
-  creator: {
+  user: {
     wallet_address: string;
     username?: string;
   };
@@ -73,8 +73,8 @@ export default function SubmissionsList({ contractId }: SubmissionsListProps) {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    {submission.creator.username ||
-                      `${submission.creator.wallet_address.slice(0, 4)}...${submission.creator.wallet_address.slice(-4)}`}
+                    {submission.user.username ||
+                      `${submission.user.wallet_address.slice(0, 4)}...${submission.user.wallet_address.slice(-4)}`}
                   </p>
                   <p className="text-xs text-gray-500">
                     {new Date(submission.created_at).toLocaleDateString()}
@@ -104,9 +104,9 @@ export default function SubmissionsList({ contractId }: SubmissionsListProps) {
 
               <div className="flex items-center justify-between text-sm text-gray-600">
                 <span>{submission.view_count.toLocaleString()} views</span>
-                {submission.validation_result && (
+                {submission.notes && (
                   <span className="text-xs text-gray-500 italic max-w-md truncate">
-                    {submission.validation_result}
+                    {submission.notes}
                   </span>
                 )}
               </div>
