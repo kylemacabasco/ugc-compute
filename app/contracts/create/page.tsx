@@ -98,7 +98,7 @@ export default function CreateContractPage() {
             <input
               type="text"
               required
-              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
               value={formData.title}
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
@@ -114,7 +114,7 @@ export default function CreateContractPage() {
             <textarea
               required
               rows={4}
-              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
@@ -130,7 +130,7 @@ export default function CreateContractPage() {
             <textarea
               required
               rows={3}
-              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
               value={formData.requirements}
               onChange={(e) =>
                 setFormData({ ...formData, requirements: e.target.value })
@@ -152,7 +152,7 @@ export default function CreateContractPage() {
                 required
                 step="0.01"
                 min="0"
-                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
                 value={formData.contractAmount}
                 onChange={(e) =>
                   setFormData({ ...formData, contractAmount: e.target.value })
@@ -170,7 +170,7 @@ export default function CreateContractPage() {
                 required
                 step="0.01"
                 min="0"
-                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
                 value={formData.ratePer1kViews}
                 onChange={(e) =>
                   setFormData({ ...formData, ratePer1kViews: e.target.value })
