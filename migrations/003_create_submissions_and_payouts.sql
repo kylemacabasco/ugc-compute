@@ -113,7 +113,7 @@ CREATE VIEW pending_contract_user_totals AS
 SELECT
     e.contract_id,
     e.user_id,
-    COALESCE(u.solana_wallet_address, u.wallet_address) AS solana_wallet_address,
+    u.wallet_address,
     SUM(e.amount_earned) AS total_amount,
     COUNT(*) AS pending_entries,
     MIN(e.calculated_at) AS first_calculated_at,
@@ -124,4 +124,4 @@ WHERE e.payout_status IN ('pending', 'retry')
 GROUP BY
     e.contract_id,
     e.user_id,
-    COALESCE(u.solana_wallet_address, u.wallet_address);
+    u.wallet_address;
