@@ -17,10 +17,11 @@ interface SubmissionRequest {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const contractId = params.id;
+    const { id } = await params;
+    const contractId = id;
     const body: SubmissionRequest = await request.json();
     const { video_url, creator_wallet, signature, message } = body;
 
@@ -209,10 +210,11 @@ export async function POST(
 // GET submissions for a contract
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const contractId = params.id;
+    const { id } = await params;
+    const contractId = id;
 
     const { data: submissions, error } = await supabase
       .from("submissions")
