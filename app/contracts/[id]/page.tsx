@@ -34,11 +34,8 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
   const [isUpdatingViews, setIsUpdatingViews] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
-=======
->>>>>>> main
   const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -53,10 +50,10 @@ export default function ContractDetailPage() {
       if (!response.ok) {
         throw new Error("Failed to fetch contracts");
       }
-
+      
       const contracts = await response.json();
       const foundContract = contracts.find((c: Contract) => c.id === params.id);
-
+      
       if (!foundContract) {
         setError("Contract not found");
       } else {
@@ -70,7 +67,11 @@ export default function ContractDetailPage() {
     }
   };
 
-<<<<<<< HEAD
+  const handleSubmissionSuccess = () => {
+    fetchContract();
+    setSubmissionsRefreshKey((prev) => prev + 1);
+  };
+
   const handleUpdateViews = async () => {
     if (!contract) return;
 
@@ -101,11 +102,6 @@ export default function ContractDetailPage() {
       setIsUpdatingViews(false);
       setTimeout(() => setUpdateMessage(null), 5000);
     }
-=======
-  const handleSubmissionSuccess = () => {
-    fetchContract();
-    setSubmissionsRefreshKey((prev) => prev + 1);
->>>>>>> main
   };
 
   if (isLoading) {
@@ -121,7 +117,10 @@ export default function ContractDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error || "Contract not found"}</p>
-          <Link href="/contracts" className="text-blue-600 hover:underline">
+          <Link
+            href="/contracts"
+            className="text-blue-600 hover:underline"
+          >
             ← Back to Contracts
           </Link>
         </div>
@@ -219,8 +218,7 @@ export default function ContractDetailPage() {
               />
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              {contract.calculated_earned.toFixed(2)} of{" "}
-              {contract.contract_amount} SOL allocated
+              {contract.calculated_earned.toFixed(2)} of {contract.contract_amount} SOL allocated
             </p>
           </div>
 
@@ -235,14 +233,7 @@ export default function ContractDetailPage() {
                 {isUpdatingViews ? "Updating Views..." : "Update View Counts"}
               </button>
               {updateMessage && (
-                <p
-                  className={`text-sm mt-2 text-center ${
-                    updateMessage.includes("success") ||
-                    updateMessage.includes("Updated")
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
+                <p className={`text-sm mt-2 text-center ${updateMessage.includes("success") || updateMessage.includes("Updated") ? "text-green-600" : "text-red-600"}`}>
                   {updateMessage}
                 </p>
               )}
@@ -283,3 +274,4 @@ export default function ContractDetailPage() {
     </div>
   );
 }
+
