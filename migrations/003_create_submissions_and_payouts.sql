@@ -1,32 +1,6 @@
 -- Create submission, earnings, and payout tables plus the view used by automation scripts.
 
--- Ensure users table has Solana payout metadata
-ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS solana_wallet_address TEXT,
-    ADD COLUMN IF NOT EXISTS payout_contact TEXT,
-    ADD COLUMN IF NOT EXISTS last_wallet_validation_at TIMESTAMP WITH TIME ZONE;
-
-ALTER TABLE users
-    DROP CONSTRAINT IF EXISTS chk_users_solana_wallet_format;
-
-ALTER TABLE users
-    ADD CONSTRAINT chk_users_solana_wallet_format
-    CHECK (
-        solana_wallet_address IS NULL
-        OR length(solana_wallet_address) BETWEEN 32 AND 44
-    );
-
-UPDATE users
-SET solana_wallet_address = wallet_address
-WHERE solana_wallet_address IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_solana_wallet_address
-    ON users(solana_wallet_address)
-    WHERE solana_wallet_address IS NOT NULL;
-
-COMMENT ON COLUMN users.solana_wallet_address IS 'Primary Solana wallet used when sending contract payouts.';
-COMMENT ON COLUMN users.payout_contact IS 'Optional email/discord handle for payout issues.';
-COMMENT ON COLUMN users.last_wallet_validation_at IS 'Timestamp of the last signature challenge for this wallet.';
+-- Note: wallet_address in users table is used for Solana payouts (wallet-based auth)
 
 -- Submissions table
 CREATE TABLE IF NOT EXISTS submissions (
@@ -49,16 +23,17 @@ CREATE INDEX IF NOT EXISTS idx_submissions_user ON submissions(user_id, contract
 
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS submissions_view_own ON submissions;
-CREATE POLICY submissions_view_own
+-- Policies for wallet-based authentication
+DROP POLICY IF EXISTS submissions_public_read ON submissions;
+CREATE POLICY submissions_public_read
     ON submissions FOR SELECT
-    USING (auth.uid() = user_id);
+    USING (true);
 
-DROP POLICY IF EXISTS submissions_manage_own ON submissions;
-CREATE POLICY submissions_manage_own
+DROP POLICY IF EXISTS submissions_public_manage ON submissions;
+CREATE POLICY submissions_public_manage
     ON submissions FOR ALL
-    USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
+    USING (true)
+    WITH CHECK (true);
 
 DROP TRIGGER IF EXISTS trg_submissions_updated_at ON submissions;
 CREATE TRIGGER trg_submissions_updated_at
@@ -86,10 +61,12 @@ CREATE INDEX IF NOT EXISTS idx_payouts_contract ON payouts(contract_id, status);
 
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS payouts_view_own ON payouts;
-CREATE POLICY payouts_view_own
-    ON payouts FOR SELECT
-    USING (auth.uid() = user_id);
+-- Policies for wallet-based authentication
+DROP POLICY IF EXISTS payouts_public_all ON payouts;
+CREATE POLICY payouts_public_all
+    ON payouts FOR ALL
+    USING (true)
+    WITH CHECK (true);
 
 -- Earnings table
 CREATE TABLE IF NOT EXISTS earnings (
@@ -117,20 +94,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_earnings_submission_id ON earnings(submiss
 
 ALTER TABLE earnings ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS earnings_view_own ON earnings;
-CREATE POLICY earnings_view_own
-    ON earnings FOR SELECT
-    USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS earnings_insert_own ON earnings;
-CREATE POLICY earnings_insert_own
-    ON earnings FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS earnings_update_own ON earnings;
-CREATE POLICY earnings_update_own
-    ON earnings FOR UPDATE
-    USING (auth.uid() = user_id);
+-- Policies for wallet-based authentication
+DROP POLICY IF EXISTS earnings_public_all ON earnings;
+CREATE POLICY earnings_public_all
+    ON earnings FOR ALL
+    USING (true)
+    WITH CHECK (true);
 
 DROP TRIGGER IF EXISTS trg_earnings_updated_at ON earnings;
 CREATE TRIGGER trg_earnings_updated_at
