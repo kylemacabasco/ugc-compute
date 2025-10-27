@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import nacl from "tweetnacl";
+import { PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -8,6 +11,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 interface SubmissionRequest {
   video_url: string;
   creator_wallet: string;
+  signature: string;
+  message: string;
 }
 
 export async function POST(
@@ -17,13 +22,61 @@ export async function POST(
   try {
     const contractId = params.id;
     const body: SubmissionRequest = await request.json();
-    const { video_url, creator_wallet } = body;
+    const { video_url, creator_wallet, signature, message } = body;
 
     // Validate required fields
-    if (!video_url || !creator_wallet) {
+    if (!video_url || !creator_wallet || !signature || !message) {
       return NextResponse.json(
-        { error: "Video URL and creator wallet are required" },
+        { error: "Video URL, wallet, signature, and message are required" },
         { status: 400 }
+      );
+    }
+
+    // Verify wallet signature
+    try {
+      const publicKey = new PublicKey(creator_wallet);
+      const messageBytes = new TextEncoder().encode(message);
+      const signatureBytes = bs58.decode(signature);
+      
+      const verified = nacl.sign.detached.verify(
+        messageBytes,
+        signatureBytes,
+        publicKey.toBytes()
+      );
+
+      if (!verified) {
+        return NextResponse.json(
+          { error: "Invalid wallet signature" },
+          { status: 401 }
+        );
+      }
+
+      // Verify message contains contract ID and timestamp within 5 minutes
+      if (!message.includes(contractId)) {
+        return NextResponse.json(
+          { error: "Signature does not match contract" },
+          { status: 401 }
+        );
+      }
+
+      const timestampMatch = message.match(/Timestamp: (\d+)/);
+      if (timestampMatch) {
+        const messageTimestamp = parseInt(timestampMatch[1]);
+        const currentTime = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (Math.abs(currentTime - messageTimestamp) > fiveMinutes) {
+          return NextResponse.json(
+            { error: "Signature expired. Please try again." },
+            { status: 401 }
+          );
+        }
+      }
+    } catch (verifyError) {
+      console.error("Signature verification error:", verifyError);
+      return NextResponse.json(
+        { error: "Failed to verify wallet signature" },
+        { status: 401 }
       );
     }
 

@@ -2,6 +2,27 @@
 
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
+
+// Extend Window interface for Phantom wallet
+declare global {
+  interface Window {
+    phantom?: {
+      solana?: {
+        signMessage: (
+          message: Uint8Array,
+          encoding: string
+        ) => Promise<{ signature: Uint8Array }>;
+      };
+    };
+    solana?: {
+      signMessage: (
+        message: Uint8Array,
+        encoding: string
+      ) => Promise<{ signature: Uint8Array }>;
+    };
+  }
+}
 
 interface SubmissionFormProps {
   contractId: string;
@@ -39,6 +60,21 @@ export default function SubmissionForm({
     setValidationResult(null);
 
     try {
+      // Sign message to prove wallet ownership
+      const timestamp = Date.now();
+      const message = `Submit content to contract\n\nContract ID: ${contractId}\nVideo URL: ${videoUrl}\nWallet: ${publicKey.toBase58()}\nTimestamp: ${timestamp}`;
+      
+      const messageBytes = new TextEncoder().encode(message);
+      
+      // Request wallet signature
+      const wallet = window.phantom?.solana || window.solana;
+      if (!wallet || !wallet.signMessage) {
+        throw new Error("Wallet does not support message signing");
+      }
+
+      const { signature } = await wallet.signMessage(messageBytes, "utf8");
+      const signatureBase58 = bs58.encode(signature);
+
       const response = await fetch(
         `/api/contracts/${contractId}/submissions`,
         {
@@ -47,6 +83,8 @@ export default function SubmissionForm({
           body: JSON.stringify({
             video_url: videoUrl,
             creator_wallet: publicKey.toBase58(),
+            signature: signatureBase58,
+            message,
           }),
         }
       );
