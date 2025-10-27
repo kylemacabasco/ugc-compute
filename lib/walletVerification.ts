@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey } from "@solana/web3.js";
 
 export interface WalletSigner {
   publicKey: PublicKey;
@@ -27,18 +27,18 @@ export class WalletVerificationService {
     const { action, details, timestamp = Date.now() } = options;
 
     if (!publicKey || !signMessage) {
-      throw new Error('Wallet not connected or does not support signing');
+      throw new Error("Wallet not connected or does not support signing");
     }
 
     // Create message to sign for verification
     let message = `Verify wallet ownership for: ${action}`;
-    
+
     if (details) {
       message += `\n\nDetails: ${details}`;
     }
-    
+
     message += `\n\nWallet: ${publicKey.toBase58()}\nTimestamp: ${timestamp}`;
-    
+
     const messageBytes = new TextEncoder().encode(message);
 
     // Request wallet signature
@@ -46,12 +46,12 @@ export class WalletVerificationService {
     try {
       signature = await signMessage(messageBytes);
     } catch (signError) {
-      throw new Error('Signature verification cancelled or failed');
+      throw new Error("Signature verification cancelled or failed");
     }
 
     // Verify the signature (basic verification that we got a signature)
     if (!signature || signature.length === 0) {
-      throw new Error('Invalid signature received');
+      throw new Error("Invalid signature received");
     }
 
     return signature;
@@ -63,11 +63,13 @@ export class WalletVerificationService {
    * @param walletAddress - The wallet address
    * @returns Formatted message for signing
    */
-  static createUsernameChangeMessage(newUsername: string, walletAddress: string): VerificationOptions {
+  static createUsernameChangeMessage(
+    newUsername: string,
+    walletAddress: string
+  ): VerificationOptions {
     return {
-      action: 'Change Username',
+      action: "Change Username",
       details: `New username: "${newUsername}"`,
     };
   }
-
 }
