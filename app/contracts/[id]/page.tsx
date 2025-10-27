@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/providers/AuthProvider";
+import SubmissionForm from "@/app/components/SubmissionForm";
+import SubmissionsList from "@/app/components/SubmissionsList";
 
 interface Contract {
   id: string;
@@ -17,6 +19,9 @@ interface Contract {
   total_submission_views: number;
   is_completed: boolean;
   created_at: string;
+  creator?: {
+    wallet_address: string;
+  };
   metadata?: {
     requirements?: string;
   };
@@ -29,6 +34,7 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (params.id) {
@@ -57,6 +63,11 @@ export default function ContractDetailPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmissionSuccess = () => {
+    fetchContract();
+    setSubmissionsRefreshKey((prev) => prev + 1);
   };
 
   if (isLoading) {
@@ -177,18 +188,19 @@ export default function ContractDetailPage() {
             </p>
           </div>
 
-          {/* Submit Button - Coming Soon */}
+          {/* Submission Form */}
           {user && !contract.is_completed && (
             <div className="border-t pt-6">
-              <button
-                disabled
-                className="w-full px-6 py-3 bg-gray-300 text-gray-500 rounded-md cursor-not-allowed"
-              >
-                Submit Content (Coming Soon)
-              </button>
-              <p className="text-xs text-gray-500 text-center mt-2">
-                Content submission will be available in the next update
-              </p>
+              {contract.creator?.wallet_address === user.wallet_address ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-700 font-medium">Your Contract</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    You cannot submit to your own contract
+                  </p>
+                </div>
+              ) : (
+                <SubmissionForm contractId={contract.id} onSuccess={handleSubmissionSuccess} />
+              )}
             </div>
           )}
 
@@ -201,12 +213,10 @@ export default function ContractDetailPage() {
           )}
         </div>
 
-        {/* Submissions Section - Placeholder */}
+        {/* Submissions Section */}
         <div className="bg-white rounded-lg shadow p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Submissions</h2>
-          <p className="text-gray-600 text-center py-8">
-            No submissions yet. Be the first to submit content!
-          </p>
+          <SubmissionsList contractId={contract.id} refreshKey={submissionsRefreshKey} />
         </div>
       </div>
     </div>

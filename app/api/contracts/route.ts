@@ -9,6 +9,7 @@ export async function GET() {
       .select(
         `
         *,
+        creator:users!creator_id(wallet_address),
         submissions (
           id,
           view_count,
