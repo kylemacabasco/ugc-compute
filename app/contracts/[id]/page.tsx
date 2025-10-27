@@ -182,7 +182,7 @@ export default function ContractDetailPage() {
           {/* Submission Form */}
           {user && !contract.is_completed && (
             <div className="border-t pt-6">
-              <SubmissionForm contractId={contract.id} onSubmissionSuccess={fetchContract} />
+              <SubmissionForm contractId={contract.id} onSuccess={fetchContract} />
             </div>
           )}
 
