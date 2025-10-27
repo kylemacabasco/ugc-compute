@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface SubmissionRequest {
   video_url: string;
-  creator_wallet: string;
+  submitter_wallet: string;
   signature: string;
   message: string;
 }
@@ -23,10 +23,10 @@ export async function POST(
     const { id } = await params;
     const contractId = id;
     const body: SubmissionRequest = await request.json();
-    const { video_url, creator_wallet, signature, message } = body;
+    const { video_url, submitter_wallet, signature, message } = body;
 
     // Validate required fields
-    if (!video_url || !creator_wallet || !signature || !message) {
+    if (!video_url || !submitter_wallet || !signature || !message) {
       return NextResponse.json(
         { error: "Video URL, wallet, signature, and message are required" },
         { status: 400 }
@@ -35,7 +35,7 @@ export async function POST(
 
     // Verify wallet signature
     try {
-      const publicKey = new PublicKey(creator_wallet);
+      const publicKey = new PublicKey(submitter_wallet);
       const messageBytes = new TextEncoder().encode(message);
       const signatureBytes = bs58.decode(signature);
       
@@ -107,7 +107,7 @@ export async function POST(
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("id")
-      .eq("wallet_address", creator_wallet)
+      .eq("wallet_address", submitter_wallet)
       .single();
 
     if (userError || !user) {

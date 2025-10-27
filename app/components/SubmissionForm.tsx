@@ -82,7 +82,7 @@ export default function SubmissionForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             video_url: videoUrl,
-            creator_wallet: publicKey.toBase58(),
+            submitter_wallet: publicKey.toBase58(),
             signature: signatureBase58,
             message,
           }),
