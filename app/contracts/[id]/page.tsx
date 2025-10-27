@@ -29,6 +29,9 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdatingViews, setIsUpdatingViews] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (params.id) {
@@ -42,10 +45,10 @@ export default function ContractDetailPage() {
       if (!response.ok) {
         throw new Error("Failed to fetch contracts");
       }
-      
+
       const contracts = await response.json();
       const foundContract = contracts.find((c: Contract) => c.id === params.id);
-      
+
       if (!foundContract) {
         setError("Contract not found");
       } else {
@@ -56,6 +59,38 @@ export default function ContractDetailPage() {
       setError("Failed to load contract");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateViews = async () => {
+    if (!contract) return;
+
+    setIsUpdatingViews(true);
+    setUpdateMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/contracts/${contract.id}/update-views`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUpdateMessage(data.message || "Views updated successfully");
+        fetchContract();
+        setSubmissionsRefreshKey((prev) => prev + 1);
+      } else {
+        setUpdateMessage(data.error || "Failed to update views");
+      }
+    } catch (error) {
+      console.error("Error updating views:", error);
+      setUpdateMessage("Failed to update views");
+    } finally {
+      setIsUpdatingViews(false);
+      setTimeout(() => setUpdateMessage(null), 5000);
     }
   };
 
@@ -72,10 +107,7 @@ export default function ContractDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error || "Contract not found"}</p>
-          <Link
-            href="/contracts"
-            className="text-blue-600 hover:underline"
-          >
+          <Link href="/contracts" className="text-blue-600 hover:underline">
             ← Back to Contracts
           </Link>
         </div>
@@ -173,9 +205,35 @@ export default function ContractDetailPage() {
               />
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              {contract.calculated_earned.toFixed(2)} of {contract.contract_amount} SOL allocated
+              {contract.calculated_earned.toFixed(2)} of{" "}
+              {contract.contract_amount} SOL allocated
             </p>
           </div>
+
+          {/* Update Views Button */}
+          {!contract.is_completed && (
+            <div className="mb-6">
+              <button
+                onClick={handleUpdateViews}
+                disabled={isUpdatingViews}
+                className="w-full px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUpdatingViews ? "Updating Views..." : "Update View Counts"}
+              </button>
+              {updateMessage && (
+                <p
+                  className={`text-sm mt-2 text-center ${
+                    updateMessage.includes("success") ||
+                    updateMessage.includes("Updated")
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {updateMessage}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Submit Button - Coming Soon */}
           {user && !contract.is_completed && (
@@ -212,4 +270,3 @@ export default function ContractDetailPage() {
     </div>
   );
 }
-
