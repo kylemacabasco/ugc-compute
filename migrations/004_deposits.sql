@@ -21,7 +21,7 @@ create table if not exists public.contract_refs (
   ref_code   text primary key,
   contract_id uuid not null references public.contracts(id) on delete cascade,
   user_id    uuid not null references public.users(id) on delete cascade,
-  status     text not null default 'active',  -- active | used | expired
+  status     text not null default 'active' check (status in ('active', 'used', 'expired')),
   expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -38,9 +38,18 @@ create trigger trg_contract_refs_touch
 before update on public.contract_refs
 for each row execute function public.touch_updated_at();
 
+-- Indexes for contract_refs
 create index if not exists idx_contract_refs_user     on public.contract_refs(user_id);
 create index if not exists idx_contract_refs_contract on public.contract_refs(contract_id);
+create index if not exists idx_contract_refs_status   on public.contract_refs(status) where status = 'active';
 
+-- Prevent duplicate active refs per user+contract combination
+create unique index if not exists ux_contract_refs_user_contract_active
+  on public.contract_refs(user_id, contract_id)
+  where status = 'active';
+
+
+-- App_settings
 create table if not exists public.app_settings (
   key text primary key,
   value text not null,
@@ -72,7 +81,8 @@ create trigger trg_deposit_cursors_touch
 before update on public.deposit_cursors
 for each row execute function public.touch_updated_at();
 
--- Deposits
+
+-- Deposits (main ledger table)
 create table if not exists public.deposits (
   id uuid primary key default gen_random_uuid(),
 
@@ -96,7 +106,7 @@ create table if not exists public.deposits (
 
   -- Lifecycle
   status text not null check (status in ('processed','confirmed','finalized')),
-  source text not null default 'rpc',
+  source text not null default 'rpc' check (source in ('rpc','webhook','backfill')),
   memo   text,
 
   -- Linking & audit
@@ -107,19 +117,17 @@ create table if not exists public.deposits (
   asset_key text generated always as (coalesce(mint, 'SOL')) stored,
 
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+  updated_at timestamptz not null default now(),
 
--- Enforce allowed sources
-alter table public.deposits
-  add constraint deposits_source_chk
-  check (source in ('rpc','webhook','backfill'));
+  -- Ensure asset_key consistency
+  constraint deposits_asset_key_chk check (asset_key = coalesce(mint, 'SOL'))
+);
 
 -- Uniqueness: one row per (tx, treasury, asset). We aggregate per asset in code.
 create unique index if not exists ux_deposits_tx_addr_asset
   on public.deposits (tx_sig, to_address, asset_key);
 
--- Helpful indexes
+-- Helpful indexes for queries
 create index if not exists idx_deposits_user_id     on public.deposits (user_id);
 create index if not exists idx_deposits_to_address  on public.deposits (to_address);
 create index if not exists idx_deposits_tx_sig      on public.deposits (tx_sig);
@@ -127,9 +135,18 @@ create index if not exists idx_deposits_contract_id on public.deposits (contract
 create index if not exists idx_deposits_reference   on public.deposits (reference_code);
 create index if not exists idx_deposits_addr_slot   on public.deposits (to_address, slot desc);
 
+-- Frontend query optimizations
+create index if not exists idx_deposits_user_created
+  on public.deposits(user_id, created_at desc);
+
+create index if not exists idx_deposits_contract_created
+  on public.deposits(contract_id, created_at desc)
+  where contract_id is not null;
+
+-- Enable RLS
 alter table public.deposits enable row level security;
 
--- RLS
+-- RLS: Users can only read their own deposits
 drop policy if exists "deposits: users read own" on public.deposits;
 create policy "deposits: users read own"
 on public.deposits for select
@@ -145,6 +162,7 @@ using (
   )
 );
 
+-- Touch trigger for updated_at
 drop trigger if exists trg_deposits_touch on public.deposits;
 create trigger trg_deposits_touch
 before update on public.deposits
@@ -156,6 +174,7 @@ create trigger trg_deposits_no_delete
 before delete on public.deposits
 for each row execute function public.forbid_delete();
 
+-- Status guard: only service_role can update, and only certain transitions allowed
 create or replace function public.deposits_status_guard()
 returns trigger language plpgsql as $$
 declare
@@ -190,6 +209,7 @@ begin
     end if;
   end if;
 
+  -- Status transition validation
   if old_status = new_status then return new; end if;
   if old_status = 'processed' and new_status in ('confirmed','finalized') then return new; end if;
   if old_status = 'confirmed' and new_status = 'finalized' then return new; end if;
@@ -201,3 +221,50 @@ drop trigger if exists trg_deposits_status_guard on public.deposits;
 create trigger trg_deposits_status_guard
 before update on public.deposits
 for each row execute function public.deposits_status_guard();
+
+
+-- Optional: Auto-expire old refs (run periodically via cron job)
+create or replace function public.expire_old_contract_refs()
+returns void language plpgsql as $$
+begin
+  update public.contract_refs
+  set status = 'expired'
+  where status = 'active'
+    and expires_at is not null
+    and expires_at < now();
+end $$;
+
+-- Optional: Helper view for aggregated deposit totals per contract
+create or replace view public.contract_deposit_totals as
+select
+  contract_id,
+  asset_key,
+  mint,
+  decimals,
+  sum(amount_base_units) as total_base_units,
+  sum(ui_amount) as total_ui_amount,
+  count(*) as deposit_count,
+  count(distinct user_id) as unique_depositors
+from public.deposits
+where contract_id is not null
+  and status = 'finalized'
+group by contract_id, asset_key, mint, decimals;
+
+-- Optional: Helper view for user deposit history
+create or replace view public.user_deposit_history as
+select
+  d.id,
+  d.user_id,
+  d.contract_id,
+  c.title as contract_title,
+  d.tx_sig,
+  d.block_time,
+  d.asset_key,
+  d.ui_amount,
+  d.status,
+  d.reference_code,
+  d.created_at
+from public.deposits d
+left join public.contracts c on c.id = d.contract_id
+where d.user_id is not null
+order by d.created_at desc;
