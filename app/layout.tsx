@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "UGC Compute",
-  description: "UGC bounty platform that auto-verifies submissions, tracks views, and pays creators based on performance.",
+  description: "UGC platform that auto-verifies submissions, tracks views, and pays creators based on performance.",
 };
 
 export default function RootLayout({

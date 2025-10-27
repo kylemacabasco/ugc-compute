@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS contracts (
         CHECK (status IN ('draft', 'awaiting_funding', 'open', 'paused', 'filled', 'paid_out', 'archived')),
     payout_status TEXT NOT NULL DEFAULT 'idle'
         CHECK (payout_status IN ('idle', 'pending', 'processing', 'retry', 'paid')),
-    bounty_amount NUMERIC(20,2) NOT NULL CHECK (bounty_amount > 0),
-    total_value NUMERIC(20,2) GENERATED ALWAYS AS (bounty_amount) STORED,
+    contract_amount NUMERIC(20,2) NOT NULL CHECK (contract_amount > 0),
+    total_value NUMERIC(20,2) GENERATED ALWAYS AS (contract_amount) STORED,
     claimed_value NUMERIC(20,2) NOT NULL DEFAULT 0,
     filled_amount NUMERIC(20,2) NOT NULL DEFAULT 0,
     currency TEXT NOT NULL DEFAULT 'SOL',
