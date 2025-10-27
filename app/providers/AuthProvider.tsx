@@ -50,7 +50,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Create new user
         const { data: newUser, error: createError } = await supabase
           .from('users')
-          .insert([{ wallet_address: walletAddress }])
+          .insert([{ 
+            wallet_address: walletAddress,
+            solana_wallet_address: walletAddress
+          }])
           .select()
           .single();
 
