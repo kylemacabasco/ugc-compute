@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/providers/AuthProvider";
+import SubmissionForm from "@/app/components/SubmissionForm";
+import SubmissionsList from "@/app/components/SubmissionsList";
 
 interface Contract {
   id: string;
@@ -177,18 +179,10 @@ export default function ContractDetailPage() {
             </p>
           </div>
 
-          {/* Submit Button - Coming Soon */}
+          {/* Submission Form */}
           {user && !contract.is_completed && (
             <div className="border-t pt-6">
-              <button
-                disabled
-                className="w-full px-6 py-3 bg-gray-300 text-gray-500 rounded-md cursor-not-allowed"
-              >
-                Submit Content (Coming Soon)
-              </button>
-              <p className="text-xs text-gray-500 text-center mt-2">
-                Content submission will be available in the next update
-              </p>
+              <SubmissionForm contractId={contract.id} onSubmissionSuccess={fetchContract} />
             </div>
           )}
 
@@ -201,12 +195,10 @@ export default function ContractDetailPage() {
           )}
         </div>
 
-        {/* Submissions Section - Placeholder */}
+        {/* Submissions Section */}
         <div className="bg-white rounded-lg shadow p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Submissions</h2>
-          <p className="text-gray-600 text-center py-8">
-            No submissions yet. Be the first to submit content!
-          </p>
+          <SubmissionsList contractId={contract.id} />
         </div>
       </div>
     </div>
