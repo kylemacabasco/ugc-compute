@@ -6,14 +6,16 @@ interface ContractCardProps {
   onClaim: (bountyId: number) => void;
 }
 
-export default function contractCard({ contract, onClaim }: ContractCardProps) {
-  const progressPercentage = (contract.claimedContract / contract.totalContract) * 100;
-  const remainingContract = contract.totalContract - contract.claimedContract;
+export default function ContractCard({ contract, onClaim }: ContractCardProps) {
+  const progressPercentage = contract.totalContract > 0
+    ? (contract.claimedContract / contract.totalContract) * 100
+    : 0;
+    const remainingContract = contract.totalContract - contract.claimedContract;
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-800 hover:scale-105 flex flex-col h-full">
       <div className="p-6 flex flex-col flex-grow">
-        {/* contract Name */}
+        {/* Contract Name */}
         <Link href={`/contract/${contract.id}`}>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
             {contract.name}
