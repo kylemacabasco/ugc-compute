@@ -34,10 +34,7 @@ export const createSupabaseServiceClient = () => {
 export interface User {
   id: string;
   wallet_address: string;
-  solana_wallet_address?: string | null;
-  payout_contact?: string | null;
   username?: string;
-  last_wallet_validation_at?: string | null;
   created_at: string;
   updated_at: string;
 }

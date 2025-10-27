@@ -60,7 +60,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .insert([
             {
               wallet_address: walletAddress,
-              solana_wallet_address: walletAddress,
             },
           ])
           .select()
