@@ -16,6 +16,7 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState('');
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [checkError, setCheckError] = useState('');
 
   const { user } = useAuth();
   const { updateUsername, checkUsernameAvailable, error: profileError, isUpdating } = useUserProfile();
@@ -49,6 +50,7 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
 
     if (!trimmed || validateUsername(trimmed)) {
       setIsAvailable(null);
+      setCheckError('');
       return;
     }
 
@@ -56,16 +58,19 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
     if (user?.username && user.username.toLowerCase() === trimmed.toLowerCase()) {
       setIsAvailable(false); // Set to false to prevent green checkmark
       setValidationError('This is already your current username');
+      setCheckError('');
       return;
     }
 
     setIsChecking(true);
+    setCheckError('');
     try {
       const available = await checkUsernameAvailable(trimmed);
       setIsAvailable(available);
     } catch (err) {
       console.error('Error checking username availability:', err);
       setIsAvailable(null);
+      setCheckError('Failed to check username availability. Please try again.');
     } finally {
       setIsChecking(false);
     }
@@ -80,8 +85,9 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
     const formatError = validateUsername(value);
     setValidationError(formatError);
 
-    // Reset availability check
+    // Reset availability check and errors
     setIsAvailable(null);
+    setCheckError('');
 
     // Debounce availability check
     const timeoutId = setTimeout(() => {
@@ -120,6 +126,9 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
       onComplete?.();
     } catch (err) {
       // Error is handled by the useUserProfile hook
+      console.error('Error updating username:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -169,8 +178,8 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
                   : isAvailable === true
                   ? 'border-green-300'
                   : 'border-gray-300'
-              }`}
-              disabled={isSubmitting}
+              } ${isUpdating || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isUpdating || isSubmitting}
             />
             {isChecking && (
               <div className="absolute right-3 top-2">
@@ -200,6 +209,10 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
           {!validationError && isAvailable === true && (
             <p className="text-green-600 text-sm mt-1">Username is available!</p>
           )}
+
+          {checkError && (
+            <p className="text-orange-600 text-sm mt-1">{checkError}</p>
+          )}
           
           {profileError && (
             <p className="text-red-600 text-sm mt-1">{profileError}</p>
@@ -210,13 +223,15 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
           <button
             type="submit"
             disabled={isUpdating || !!validationError || isAvailable !== true}
-            className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-              isSubmitting || !!validationError || isAvailable !== true
+            className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 ${
+              isUpdating || isSubmitting || !!validationError || isAvailable !== true
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
             }`}
           >
-          
+            {isUpdating && (
+              <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
+            )}
             {isUpdating ? 'Verifying & Saving…' : isFirstTime ? 'Create Username' : 'Sign & Update Username'}
           </button>
 
@@ -224,8 +239,8 @@ export default function UsernameForm({ isFirstTime = false, onComplete, onSkip }
             <button
               type="button"
               onClick={handleSkip}
-              disabled={isUpdating}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+              disabled={isUpdating || isSubmitting}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Skip for now
             </button>
