@@ -63,9 +63,9 @@ export default function SubmissionForm({
       // Sign message to prove wallet ownership
       const timestamp = Date.now();
       const message = `Submit content to contract\n\nContract ID: ${contractId}\nVideo URL: ${videoUrl}\nWallet: ${publicKey.toBase58()}\nTimestamp: ${timestamp}`;
-      
+
       const messageBytes = new TextEncoder().encode(message);
-      
+
       // Request wallet signature
       const wallet = window.phantom?.solana || window.solana;
       if (!wallet || !wallet.signMessage) {
@@ -75,19 +75,16 @@ export default function SubmissionForm({
       const { signature } = await wallet.signMessage(messageBytes, "utf8");
       const signatureBase58 = bs58.encode(signature);
 
-      const response = await fetch(
-        `/api/contracts/${contractId}/submissions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            video_url: videoUrl,
-            submitter_wallet: publicKey.toBase58(),
-            signature: signatureBase58,
-            message,
-          }),
-        }
-      );
+      const response = await fetch(`/api/contracts/${contractId}/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_url: videoUrl,
+          submitter_wallet: publicKey.toBase58(),
+          signature: signatureBase58,
+          message,
+        }),
+      });
 
       const data = await response.json();
 
@@ -136,7 +133,7 @@ export default function SubmissionForm({
             className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://youtube.com/watch?v=..."
+            placeholder="https://youtube.com/watch?v=…"
             disabled={isSubmitting}
           />
           <p className="text-sm text-gray-500 mt-1">
@@ -178,7 +175,7 @@ export default function SubmissionForm({
             disabled={isSubmitting || !videoUrl}
             className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? "Validating..." : "Submit Content"}
+            {isSubmitting ? "Validating…" : "Submit Content"}
           </button>
         )}
       </form>
@@ -195,4 +192,3 @@ export default function SubmissionForm({
     </div>
   );
 }
-
