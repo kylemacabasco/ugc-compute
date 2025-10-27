@@ -1,17 +1,40 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Browser client for client-side operations
-export const createSupabaseBrowserClient = () => 
-  createBrowserClient(supabaseUrl, supabaseAnonKey)
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Missing Supabase environment configuration");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Helper function for server-side operations
+export const createSupabaseServiceClient = () => {
+  if (typeof window !== "undefined") {
+    throw new Error(
+      "createSupabaseServiceClient is only available server-side"
+    );
+  }
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error("Missing env.SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  return createClient(supabaseUrl, serviceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+};
 
 // Database types
 export interface User {
-  id: string
-  wallet_address: string
-  username?: string
-  created_at: string
-  updated_at: string
+  id: string;
+  wallet_address: string;
+  username?: string;
+  created_at: string;
+  updated_at: string;
 }
