@@ -8,7 +8,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { contracts } from "./data/contracts";
 import { useState } from "react";
-import Link from "next/link";
+import ContractCard from "./components/ContractCard";
 
 export default function Home() {
   const { connected } = useWallet();
@@ -149,52 +149,11 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {contracts.map((contract) => (
-            <div
+            <ContractCard
               key={contract.id}
-              className="bg-white dark:bg-slate-900 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-800 hover:scale-105"
-            >
-              <div className="p-6">
-                {/* Contract Name */}
-                <Link href={`/contract/${contract.id}`}>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-                    {contract.name}
-                  </h2>
-                </Link>
-
-                {/* Total Contract and Rate */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">
-                      Total Contract
-                    </span>
-                    <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                      ${contract.totalContract.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">
-                      Rate
-                    </span>
-                    <span className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                      ${contract.ratePer1kViews}/1k views
-                    </span>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-slate-600 dark:text-slate-300 mb-6">
-                  {contract.description}
-                </p>
-
-                {/* CTA Button */}
-                <button
-                  onClick={() => handleClaimContract(contract.id)}
-                  className="w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold py-3 px-6 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors duration-200"
-                >
-                  Claim Contract
-                </button>
-              </div>
-            </div>
+              contract={contract}
+              onClaim={handleClaimContract}
+            />
           ))}
         </div>
       </main>
