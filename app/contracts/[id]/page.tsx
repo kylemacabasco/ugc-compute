@@ -19,6 +19,9 @@ interface Contract {
   total_submission_views: number;
   is_completed: boolean;
   created_at: string;
+  creator?: {
+    wallet_address: string;
+  };
   metadata?: {
     requirements?: string;
   };
@@ -188,7 +191,16 @@ export default function ContractDetailPage() {
           {/* Submission Form */}
           {user && !contract.is_completed && (
             <div className="border-t pt-6">
-              <SubmissionForm contractId={contract.id} onSuccess={handleSubmissionSuccess} />
+              {contract.creator?.wallet_address === user.wallet_address ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-700 font-medium">Your Contract</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    You cannot submit to your own contract
+                  </p>
+                </div>
+              ) : (
+                <SubmissionForm contractId={contract.id} onSuccess={handleSubmissionSuccess} />
+              )}
             </div>
           )}
 
