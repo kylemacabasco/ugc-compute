@@ -70,16 +70,24 @@ export async function POST(
 
     const viewsData = await youtubeResponse.json();
 
+    if (!viewsData.results || !Array.isArray(viewsData.results)) {
+      console.error("Invalid YouTube API response:", viewsData);
+      return NextResponse.json(
+        { error: "Invalid response from YouTube API" },
+        { status: 500 }
+      );
+    }
+
     let updatedCount = 0;
     let failedCount = 0;
 
-    for (const result of viewsData) {
+    for (const result of viewsData.results) {
       const submission = submissions.find(
         (s: any) => s.video_url === result.url
       );
 
-      if (submission && result.views !== null && result.views !== undefined) {
-        const newViewCount = result.views;
+      if (submission && result.viewCount !== null && result.viewCount !== undefined) {
+        const newViewCount = result.viewCount;
         const oldViewCount = submission.view_count || 0;
 
         if (newViewCount !== oldViewCount) {
@@ -99,13 +107,22 @@ export async function POST(
             const earnedAmount = (newViews / 1000) * contract.rate_per_1k_views;
 
             if (earnedAmount > 0) {
-              await supabase.from("earnings").insert({
-                contract_id: contractId,
-                user_id: submission.user_id,
-                submission_id: submission.id,
-                amount_earned: earnedAmount,
-                payout_status: "pending",
-              });
+              const { error: earningsError } = await supabase
+                .from("earnings")
+                .insert({
+                  contract_id: contractId,
+                  user_id: submission.user_id,
+                  submission_id: submission.id,
+                  amount_earned: earnedAmount,
+                  payout_status: "pending",
+                });
+
+              if (earningsError) {
+                console.error(
+                  `Failed to create earnings for submission ${submission.id}:`,
+                  earningsError
+                );
+              }
             }
 
             updatedCount++;
