@@ -45,10 +45,9 @@ export async function GET() {
       const cappedEarned = Math.min(earnedAmount, contract.contract_amount);
 
       // Calculate progress percentage
-      const progressPercentage = Math.min(
-        (earnedAmount / contract.contract_amount) * 100,
-        100
-      );
+      const progressPercentage = contract.contract_amount > 0
+        ? Math.min((earnedAmount / contract.contract_amount) * 100, 100)
+        : 0;
 
       return {
         ...contract,
@@ -92,6 +91,14 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Validate positive numbers
+    if (contractAmount <= 0 || ratePer1kViews <= 0) {
+      return NextResponse.json(
+        { error: "Contract amount and rate must be positive numbers" },
         { status: 400 }
       );
     }

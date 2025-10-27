@@ -151,7 +151,7 @@ export default function CreateContractPage() {
                 type="number"
                 required
                 step="0.01"
-                min="0"
+                min="0.01"
                 className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
                 value={formData.contractAmount}
                 onChange={(e) =>
@@ -169,7 +169,7 @@ export default function CreateContractPage() {
                 type="number"
                 required
                 step="0.01"
-                min="0"
+                min="0.01"
                 className="w-full border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500"
                 value={formData.ratePer1kViews}
                 onChange={(e) =>
