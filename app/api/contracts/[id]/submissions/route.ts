@@ -10,6 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface SubmissionRequest {
   video_url: string;
+  platform: string;
   submitter_wallet: string;
   signature: string;
   message: string;
@@ -23,12 +24,20 @@ export async function POST(
     const { id } = await params;
     const contractId = id;
     const body: SubmissionRequest = await request.json();
-    const { video_url, submitter_wallet, signature, message } = body;
+    const { video_url, platform, submitter_wallet, signature, message } = body;
 
     // Validate required fields
-    if (!video_url || !submitter_wallet || !signature || !message) {
+    if (!video_url || !platform || !submitter_wallet || !signature || !message) {
       return NextResponse.json(
-        { error: "Video URL, wallet, signature, and message are required" },
+        { error: "Video URL, platform, wallet, signature, and message are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate platform (only YouTube supported for now)
+    if (platform !== "youtube") {
+      return NextResponse.json(
+        { error: "Only YouTube platform is supported" },
         { status: 400 }
       );
     }
@@ -176,6 +185,7 @@ export async function POST(
           contract_id: contractId,
           user_id: user.id,
           video_url,
+          platform,
           status: "approved", // Auto-approve if Gemini validates
           notes: validation.explanation,
           view_count: 0,

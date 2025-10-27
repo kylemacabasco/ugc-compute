@@ -55,6 +55,13 @@ export default function SubmissionForm({
       return;
     }
 
+    // Only YouTube supported for now
+    const platform = "youtube";
+    if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
+      setError("Please enter a valid YouTube URL");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setValidationResult(null);
@@ -80,6 +87,7 @@ export default function SubmissionForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           video_url: videoUrl,
+          platform,
           submitter_wallet: publicKey.toBase58(),
           signature: signatureBase58,
           message,

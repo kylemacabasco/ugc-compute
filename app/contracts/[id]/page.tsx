@@ -31,6 +31,7 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (params.id) {
@@ -59,6 +60,11 @@ export default function ContractDetailPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmissionSuccess = () => {
+    fetchContract();
+    setSubmissionsRefreshKey((prev) => prev + 1);
   };
 
   if (isLoading) {
@@ -182,7 +188,7 @@ export default function ContractDetailPage() {
           {/* Submission Form */}
           {user && !contract.is_completed && (
             <div className="border-t pt-6">
-              <SubmissionForm contractId={contract.id} onSuccess={fetchContract} />
+              <SubmissionForm contractId={contract.id} onSuccess={handleSubmissionSuccess} />
             </div>
           )}
 
@@ -198,7 +204,7 @@ export default function ContractDetailPage() {
         {/* Submissions Section */}
         <div className="bg-white rounded-lg shadow p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Submissions</h2>
-          <SubmissionsList contractId={contract.id} />
+          <SubmissionsList contractId={contract.id} refreshKey={submissionsRefreshKey} />
         </div>
       </div>
     </div>

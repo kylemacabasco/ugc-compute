@@ -18,15 +18,16 @@ interface Submission {
 
 interface SubmissionsListProps {
   contractId: string;
+  refreshKey?: number;
 }
 
-export default function SubmissionsList({ contractId }: SubmissionsListProps) {
+export default function SubmissionsList({ contractId, refreshKey }: SubmissionsListProps) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchSubmissions();
-  }, [contractId]);
+  }, [contractId, refreshKey]);
 
   const fetchSubmissions = async () => {
     try {
