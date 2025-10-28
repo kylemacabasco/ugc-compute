@@ -73,7 +73,7 @@ export default function ContractDetailPage() {
   };
 
   const handleUpdateViews = async () => {
-    if (!contract) return;
+    if (!contract || !user) return;
 
     setIsUpdatingViews(true);
     setUpdateMessage(null);
@@ -83,6 +83,8 @@ export default function ContractDetailPage() {
         `/api/contracts/${contract.id}/update-views`,
         {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updater_wallet: user.wallet_address }),
         }
       );
 

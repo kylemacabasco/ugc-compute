@@ -104,7 +104,9 @@ export default function SubmissionsList({ contractId, refreshKey }: SubmissionsL
               </a>
 
               <div className="flex items-center justify-between text-sm text-gray-600">
-                <span>{submission.view_count.toLocaleString()} views</span>
+                <span className="font-medium transition-all duration-300">
+                  {submission.view_count.toLocaleString()} views
+                </span>
                 {submission.notes && (
                   <span className="text-xs text-gray-500 italic max-w-md truncate">
                     {submission.notes}

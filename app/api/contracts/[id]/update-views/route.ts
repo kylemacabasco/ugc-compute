@@ -5,7 +5,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// update-youtube-views endpoint
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,7 +15,7 @@ export async function POST(
 
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
-      .select("rate_per_1k_views")
+      .select("rate_per_1k_views, creator_id")
       .eq("id", contractId)
       .single();
 
@@ -25,6 +24,24 @@ export async function POST(
         { error: "Contract not found" },
         { status: 404 }
       );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { updater_wallet } = body;
+
+    if (updater_wallet) {
+      const { data: creator } = await supabase
+        .from("users")
+        .select("wallet_address")
+        .eq("id", contract.creator_id)
+        .single();
+
+      if (creator?.wallet_address !== updater_wallet) {
+        return NextResponse.json(
+          { error: "Only contract creator can update views" },
+          { status: 403 }
+        );
+      }
     }
 
     const { data: submissions, error: submissionsError } = await supabase
@@ -103,17 +120,30 @@ export async function POST(
             );
             failedCount++;
           } else {
+            const totalEarnedAmount = (newViewCount / 1000) * contract.rate_per_1k_views;
             const newViews = newViewCount - oldViewCount;
-            const earnedAmount = (newViews / 1000) * contract.rate_per_1k_views;
+            const incrementalEarned = (newViews / 1000) * contract.rate_per_1k_views;
 
-            if (earnedAmount > 0) {
+            const { error: updateSubmissionError } = await supabase
+              .from("submissions")
+              .update({ earned_amount: totalEarnedAmount })
+              .eq("id", submission.id);
+
+            if (updateSubmissionError) {
+              console.error(
+                `Failed to update submission earned_amount ${submission.id}:`,
+                updateSubmissionError
+              );
+            }
+
+            if (incrementalEarned > 0) {
               const { error: earningsError } = await supabase
                 .from("earnings")
                 .insert({
                   contract_id: contractId,
                   user_id: submission.user_id,
                   submission_id: submission.id,
-                  amount_earned: earnedAmount,
+                  amount_earned: incrementalEarned,
                   payout_status: "pending",
                 });
 
