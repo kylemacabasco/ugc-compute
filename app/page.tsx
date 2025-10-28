@@ -1,45 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import WalletButton from "./components/WalletButton";
 import UsernameForm from "./components/UsernameForm";
 import UserProfile from "./components/UserProfile";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { contracts } from "./data/contracts";
-import { useState } from "react";
-import ContractCard from "./components/ContractCard";
+import ContractCard, { ApiContract } from "@/app/components/ContractCard";
 
-export default function Home() {
+export default function HomePage() {
   const { connected } = useWallet();
   const { user, loading } = useAuth();
   const [showProfile, setShowProfile] = useState(false);
-  const [selectedContract, setSelectedContract] = useState<number | null>(null);
-  const [platform, setPlatform] = useState("youtube");
-  const [url, setUrl] = useState("");
+  const [contracts, setContracts] = useState<ApiContract[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleClaimContract = (contractId: number) => {
-    setSelectedContract(contractId);
-    setUrl("");
-    setPlatform("youtube");
-  };
-
-  const handleSubmit = () => {
-    const contract = contracts.find((c) => c.id === selectedContract);
-    if (contract && url) {
-      alert(`Submitted!\nContract: ${contract.name}\nPlatform: ${platform}\nURL: ${url}`);
-      setSelectedContract(null);
-      setUrl("");
+  useEffect(() => {
+    if (connected && user) {
+      fetchContracts();
     }
-  };
+  }, [connected, user]);
 
-  const handleCalculate = () => {
-    const contract = contracts.find((c) => c.id === selectedContract);
-    if (contract && url) {
-      // Mock calculation - in real app you'd fetch actual view count
-      const mockViews = Math.floor(Math.random() * 100000) + 1000;
-      const earnings = (mockViews / 1000) * contract.ratePer1kViews;
-      alert(`Estimated Earnings:\nViews: ${mockViews.toLocaleString()}\nEarnings: $${earnings.toFixed(2)}`);
+  const fetchContracts = async () => {
+    try {
+      const response = await fetch("/api/contracts");
+      if (response.ok) {
+        const data = await response.json();
+        setContracts(data);
+      }
+    } catch (error) {
+      console.error("Error fetching contracts:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -147,92 +141,40 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {contracts.map((contract) => (
-            <ContractCard
-              key={contract.id}
-              contract={contract}
-              onClaim={handleClaimContract}
-            />
-          ))}
+        {/* Create Contract Button */}
+        <div className="flex justify-end mb-6">
+          <Link
+            href="/contracts/create"
+            className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
+          >
+            + Create Contract
+          </Link>
         </div>
-      </main>
 
-      {/* Claim Contract Modal */}
-      {selectedContract && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
-            <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                Claim Contract
-              </h2>
-              <button
-                onClick={() => setSelectedContract(null)}
-                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
-                {contracts.find((c) => c.id === selectedContract)?.name}
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {contracts.find((c) => c.id === selectedContract)?.description}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Platform Dropdown */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Platform
-                </label>
-                <select
-                  value={platform}
-                  onChange={(e) => setPlatform(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="youtube">YouTube</option>
-                </select>
-              </div>
-
-              {/* URL Input */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Content URL
-                </label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={handleCalculate}
-                  disabled={!url}
-                  className="flex-1 bg-blue-600 dark:bg-blue-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Calculate
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={!url}
-                  className="flex-1 bg-emerald-600 dark:bg-emerald-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Submit
-                </button>
-              </div>
-            </div>
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        </div>
-      )}
+        ) : contracts.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-12 text-center">
+            <p className="text-slate-600 dark:text-slate-400 mb-4">No contracts yet</p>
+            {user && (
+              <Link
+                href="/contracts/create"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Create the first one →
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {contracts.map((contract) => (
+              <ContractCard key={contract.id} contract={contract} />
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

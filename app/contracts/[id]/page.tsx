@@ -135,10 +135,10 @@ export default function ContractDetailPage() {
       <div className="max-w-4xl mx-auto">
         {/* Back Button */}
         <Link
-          href="/contracts"
+          href="/"
           className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6"
         >
-          ← Back to Contracts
+          ← Back to Home
         </Link>
 
         {/* Contract Header */}

@@ -1,86 +1,86 @@
-import { Contract } from "../data/contracts";
 import Link from "next/link";
 
-interface ContractCardProps {
-  contract: Contract;
-  onClaim: (bountyId: number) => void;
+export interface ApiContract {
+  id: string;
+  title: string;
+  description: string;
+  contract_amount: number;
+  rate_per_1k_views: number;
+  status: string;
+  calculated_earned: number;
+  progress_percentage: number;
+  total_submission_views: number;
+  is_completed: boolean;
+  created_at: string;
 }
 
-export default function ContractCard({ contract, onClaim }: ContractCardProps) {
-  const progressPercentage = contract.totalContract > 0
-    ? (contract.claimedContract / contract.totalContract) * 100
-    : 0;
-    const remainingContract = contract.totalContract - contract.claimedContract;
+interface ContractCardProps {
+  contract: ApiContract;
+}
 
+export default function ContractCard({ contract }: ContractCardProps) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-800 hover:scale-105 flex flex-col h-full">
-      <div className="p-6 flex flex-col flex-grow">
-        {/* Contract Name */}
-        <Link href={`/contract/${contract.id}`}>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-            {contract.name}
-          </h2>
-        </Link>
+    <Link
+      href={`/contracts/${contract.id}`}
+      className="bg-white dark:bg-slate-900 rounded-lg shadow hover:shadow-lg transition-shadow p-6 block border border-slate-200 dark:border-slate-800"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+          {contract.title}
+        </h2>
+        <span
+          className={`px-3 py-1 text-xs font-medium rounded-full ${
+            contract.is_completed
+              ? "bg-green-100 text-green-800"
+              : "bg-blue-100 text-blue-800"
+          }`}
+        >
+          {contract.is_completed ? "Completed" : contract.status}
+        </span>
+      </div>
 
-        {/* Total contract and Rate */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex flex-col">
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              Total Contract
-            </span>
-            <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              ${contract.totalContract.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              Rate
-            </span>
-            <span className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-              ${contract.ratePer1kViews}/1k views
-            </span>
-          </div>
+      <p className="text-gray-600 dark:text-slate-400 text-sm mb-4 line-clamp-2">
+        {contract.description}
+      </p>
+
+      <div className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500 dark:text-slate-400">Total Amount:</span>
+          <span className="font-semibold text-gray-900 dark:text-slate-100">
+            {contract.contract_amount} SOL
+          </span>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Progress
-            </span>
-            <span className="text-sm text-slate-600 dark:text-slate-400">
-              ${remainingContract.toLocaleString()} remaining
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500 dark:text-slate-400">Rate:</span>
+          <span className="font-semibold text-gray-900 dark:text-slate-100">
+            {contract.rate_per_1k_views} SOL / 1k views
+          </span>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-gray-500 dark:text-slate-400">Progress</span>
+            <span className="text-gray-900 dark:text-slate-100">
+              {contract.progress_percentage.toFixed(0)}%
             </span>
           </div>
-          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
             <div
-              className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-full rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPercentage}%` }}
+              className={`h-2 rounded-full ${
+                contract.is_completed ? "bg-green-500" : "bg-blue-600"
+              }`}
+              style={{ width: `${Math.min(contract.progress_percentage, 100)}%` }}
             />
           </div>
-          <div className="flex justify-between items-center mt-1">
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              ${contract.claimedContract.toLocaleString()} claimed
-            </span>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {progressPercentage.toFixed(0)}%
-            </span>
-          </div>
         </div>
 
-        {/* Description */}
-        <p className="text-slate-600 dark:text-slate-300 mb-6 flex-grow">
-          {contract.description}
-        </p>
-
-        {/* CTA Button */}
-        <button
-          onClick={() => onClaim(contract.id)}
-          className="w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold py-3 px-6 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors duration-200 mt-auto"
-        >
-          Claim Contract
-        </button>
+        {contract.total_submission_views > 0 && (
+          <div className="text-sm text-gray-500 dark:text-slate-400">
+            {contract.total_submission_views.toLocaleString()} total views
+          </div>
+        )}
       </div>
-    </div>
+    </Link>
   );
 }
