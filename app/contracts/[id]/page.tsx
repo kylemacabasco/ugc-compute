@@ -34,6 +34,8 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdatingViews, setIsUpdatingViews] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -68,6 +70,40 @@ export default function ContractDetailPage() {
   const handleSubmissionSuccess = () => {
     fetchContract();
     setSubmissionsRefreshKey((prev) => prev + 1);
+  };
+
+  const handleUpdateViews = async () => {
+    if (!contract || !user) return;
+
+    setIsUpdatingViews(true);
+    setUpdateMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/contracts/${contract.id}/update-views`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updater_wallet: user.wallet_address }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUpdateMessage(data.message || "Views updated successfully");
+        fetchContract();
+        setSubmissionsRefreshKey((prev) => prev + 1);
+      } else {
+        setUpdateMessage(data.error || "Failed to update views");
+      }
+    } catch (error) {
+      console.error("Error updating views:", error);
+      setUpdateMessage("Failed to update views");
+    } finally {
+      setIsUpdatingViews(false);
+      setTimeout(() => setUpdateMessage(null), 5000);
+    }
   };
 
   if (isLoading) {
@@ -187,6 +223,24 @@ export default function ContractDetailPage() {
               {contract.calculated_earned.toFixed(2)} of {contract.contract_amount} SOL allocated
             </p>
           </div>
+
+          {/* Update Views Button */}
+          {!contract.is_completed && (
+            <div className="mb-6">
+              <button
+                onClick={handleUpdateViews}
+                disabled={isUpdatingViews}
+                className="w-full px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUpdatingViews ? "Updating Views..." : "Update View Counts"}
+              </button>
+              {updateMessage && (
+                <p className={`text-sm mt-2 text-center ${updateMessage.includes("success") || updateMessage.includes("Updated") ? "text-green-600" : "text-red-600"}`}>
+                  {updateMessage}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Submission Form */}
           {user && !contract.is_completed && (
