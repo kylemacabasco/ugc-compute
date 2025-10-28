@@ -145,21 +145,46 @@ export async function POST(
             }
 
             if (incrementalEarned > 0) {
-              const { error: earningsError } = await supabase
+              // Get existing earnings for this submission if any
+              const { data: existingEarnings } = await supabase
                 .from("earnings")
-                .insert({
-                  contract_id: contractId,
-                  user_id: submission.user_id,
-                  submission_id: submission.id,
-                  amount_earned: incrementalEarned,
-                  payout_status: "pending",
-                });
+                .select("id, amount_earned")
+                .eq("submission_id", submission.id)
+                .single();
 
-              if (earningsError) {
-                console.error(
-                  `Failed to create earnings for submission ${submission.id}:`,
-                  earningsError
-                );
+              if (existingEarnings) {
+                // Update existing earnings by adding the incremental amount
+                const { error: updateEarningsError } = await supabase
+                  .from("earnings")
+                  .update({
+                    amount_earned: incrementalEarned + existingEarnings.amount_earned,
+                  })
+                  .eq("id", existingEarnings.id);
+
+                if (updateEarningsError) {
+                  console.error(
+                    `Failed to update earnings for submission ${submission.id}:`,
+                    updateEarningsError
+                  );
+                }
+              } else {
+                // Insert new earnings record
+                const { error: earningsError } = await supabase
+                  .from("earnings")
+                  .insert({
+                    contract_id: contractId,
+                    user_id: submission.user_id,
+                    submission_id: submission.id,
+                    amount_earned: incrementalEarned,
+                    payout_status: "pending",
+                  });
+
+                if (earningsError) {
+                  console.error(
+                    `Failed to create earnings for submission ${submission.id}:`,
+                    earningsError
+                  );
+                }
               }
             }
 
