@@ -3,6 +3,7 @@
 import Link from "next/link";
 import UserProfile from "@/app/components/UserProfile";
 import UsernameForm from "@/app/components/UsernameForm";
+import ContractManagement from "@/app/components/ContractManagement";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
@@ -48,9 +49,9 @@ export default function ProfilePage() {
       </header>
 
       {/* Profile content */}
-      <div className="flex items-center justify-center py-8 px-4">
+      <div className="py-8 px-4">
         {!user?.username ? (
-          <div className="max-w-md w-full">
+          <div className="max-w-md mx-auto">
             <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <p className="text-sm text-blue-800 dark:text-blue-200">
                 <strong>Create a username</strong> to access contracts and start earning!
@@ -62,7 +63,19 @@ export default function ProfilePage() {
             />
           </div>
         ) : (
-          <UserProfile />
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* User Profile Card - Left side */}
+              <div className="lg:col-span-1">
+                <UserProfile />
+              </div>
+              
+              {/* Contract Management - Right side */}
+              <div className="lg:col-span-2">
+                <ContractManagement />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
