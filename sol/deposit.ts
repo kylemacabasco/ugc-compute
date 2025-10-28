@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// Deposit Indexer: Polls Solana for treasury-address transactions and ingests inbound SOL/SPL deposits into the database.
+// Focus: Reliable extraction, attribution via memo ref codes, idempotent upserts, and heartbeat telemetry.
 import "dotenv/config";
 import { Connection, PublicKey, type VersionedTransactionResponse } from "@solana/web3.js";
 import { createSupabaseServiceClient } from "../lib/supabase";
@@ -10,27 +12,42 @@ const TREASURY = process.env.TREASURY_ADDRESS;
 if (!RPC) throw new Error("SOLANA_RPC_URL is required");
 if (!TREASURY) throw new Error("TREASURY_ADDRESS is required");
 
+// Set the target finality used when fetching transactions
 const GET_TX_FINALITY: "confirmed" | "finalized" = "finalized";
+
+// Set the main polling interval for new signatures
 const POLL_MS = 8000;
+
+// Set the number of signatures fetched per page from RPC
 const SIGNATURE_BATCH_LIMIT = 50;
+
+// Set the maximum initial backfill count when no cursor exists
 const INITIAL_BACKFILL_CAP = 500;
+
+// Define SOL decimal places for UI formatting
 const SOL_DECIMALS = 9;
+
+// Define Memo Program ID for extracting reference codes
 const MEMO_PID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
-// Retry configuration
+// Set retry behavior for transient RPC/DB errors
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-// Heartbeat configuration
+// Configure heartbeat telemetry interval for liveness reporting
 const HEARTBEAT_INTERVAL_MS = 60000; // 1 minute
+
+// Track last heartbeat time and processing stats for telemetry
 let lastHeartbeat = Date.now();
 let lastProcessedSignature: string | null = null;
 let totalProcessed = 0;
 let totalErrors = 0;
 
+// Create the Solana RPC connection with a default commitment
 const conn = new Connection(RPC, { commitment: "confirmed" });
 const tKey = new PublicKey(TREASURY);
 
+// This function formats an integer base-unit amount to a UI string with decimals
 function formatUiAmount(amount: bigint, decimals: number) {
   const neg = amount < 0n;
   const abs = neg ? -amount : amount;
@@ -43,12 +60,12 @@ function formatUiAmount(amount: bigint, decimals: number) {
   return `${neg ? "-" : ""}${intPart}${frac ? "." + frac : ""}`;
 }
 
-// extract inbound SOL + SPL transfers to target
+// This function scans a transaction to extract inbound SOL and SPL token transfers into a target address
 function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   const out: Array<{ mint: string | null; amount: bigint; dec: number; from?: string }> = [];
   if (!tx.meta) return out;
 
-  // get account keys robustly
+  // Get account keys from the transaction, using lookups if available
   const msg: any = tx.transaction.message;
   const keys: PublicKey[] =
     (msg.staticAccountKeys as PublicKey[]) ??
@@ -56,7 +73,7 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
     msg.getAccountKeys?.().staticAccountKeys ??
     [];
 
-  // SOL via pre/post balance delta
+  // Compute SOL deltas from pre/post lamport balances and collect inbound to target
   const pre = tx.meta.preBalances || [];
   const post = tx.meta.postBalances || [];
   const deltas = keys.map((_, i) => BigInt(post[i] ?? 0) - BigInt(pre[i] ?? 0));
@@ -65,17 +82,24 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
     const d = deltas[i];
     if (d > 0n) {
       const senders = deltas.map((v, j) => ({ v, j })).filter((x) => x.j !== i && x.v < 0n);
-      out.push({ mint: null, amount: d, dec: SOL_DECIMALS, from: senders.length === 1 ? keys[senders[0].j].toBase58() : undefined });
+      out.push({
+        mint: null,
+        amount: d,
+        dec: SOL_DECIMALS,
+        from: senders.length === 1 ? keys[senders[0].j].toBase58() : undefined,
+      });
     }
   });
 
-  // SPL via token balance deltas
+  // Compute SPL deltas from token balance changes and collect inbound to target
   const preT = tx.meta.preTokenBalances ?? [];
   const postT = tx.meta.postTokenBalances ?? [];
   const before: Record<string, { amount?: string; mint: string; dec: number; owner?: string }> = {};
   const after: Record<string, { amount?: string; mint: string; dec: number; owner?: string }> = {};
   for (const p of preT) before[`${p.accountIndex}:${p.mint}`] = { amount: p.uiTokenAmount.amount, mint: p.mint, dec: p.uiTokenAmount.decimals, owner: p.owner };
   for (const p of postT) after[`${p.accountIndex}:${p.mint}`] = { amount: p.uiTokenAmount.amount, mint: p.mint, dec: p.uiTokenAmount.decimals, owner: p.owner };
+
+  // Merge before/after maps to compute per-mint owner deltas
   const all = new Set([...Object.keys(before), ...Object.keys(after)]);
   const byMint: Record<string, { owner: string; delta: bigint; dec: number }[]> = {};
   for (const k of all) {
@@ -87,6 +111,8 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
     const d = BigInt(b?.amount ?? "0") - BigInt(a?.amount ?? "0");
     (byMint[mint] ??= []).push({ owner, delta: d, dec });
   }
+
+  // Add entries where target gained tokens, optionally deriving a single sender
   for (const [mint, rows] of Object.entries(byMint)) {
     const gain = rows.find((r) => {
       try { return new PublicKey(r.owner).equals(target) && r.delta > 0n; } catch { return false; }
@@ -99,12 +125,12 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   return out;
 }
 
-// ingest one tx into public.deposits
+// This function ingests a single transaction into the deposits table after extracting inbound transfers
 async function ingest(signature: string, tx: VersionedTransactionResponse, treasury: string) {
   const inbound = extractInbound(tx, new PublicKey(treasury));
   if (!inbound.length) return;
 
-  // aggregate per-asset
+  // Aggregate amounts per asset key to handle multiple inbound changes in one transaction
   const agg = new Map<string, { mint: string | null; amount: bigint; dec: number }>();
   for (const x of inbound) {
     const key = `${x.mint ?? "SOL"}:${x.dec}`;
@@ -113,7 +139,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     else agg.set(key, { mint: x.mint, amount: x.amount, dec: x.dec });
   }
 
-  // parse memo and ref code
+  // Attempt to parse a memo-based reference code from instructions or logs
   let ref: string | null = null;
   try {
     const msg: any = tx?.transaction?.message;
@@ -142,7 +168,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   } catch {}
 
-  // resolve contract + user via ref, else fallback by sender
+  // Resolve contract and user from the reference code, with expiration handling
   let resolvedContractId: string | null = null;
   let resolvedUserId: string | null = null;
   let refWasValid = false;
@@ -154,16 +180,15 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
       .eq("ref_code", ref)
       .eq("status", "active")
       .maybeSingle();
-    
+
     if (refErr) throw refErr;
-    
+
     if (refRow) {
-      // ✅ FIX #1: Check if ref has expired
+      // Check if the reference code is expired and degrade linking if so
       if (refRow.expires_at && new Date(refRow.expires_at) < new Date()) {
         console.warn(`[deposit] Expired ref: ${ref} for tx ${signature}`);
-        // Still ingest deposit but don't link to contract
         resolvedContractId = null;
-        resolvedUserId = refRow.user_id ?? null; // Still link to user
+        resolvedUserId = refRow.user_id ?? null;
       } else {
         resolvedContractId = refRow.contract_id ?? null;
         resolvedUserId = refRow.user_id ?? null;
@@ -174,7 +199,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   }
 
-  // Fallback: resolve user by sender wallet if not resolved via ref
+  // Fallback to resolving user by the inferred sender wallet if ref did not map to a user
   if (!resolvedUserId) {
     const anyFrom = inbound.find((z) => z.from)?.from ?? null;
     if (anyFrom) {
@@ -188,19 +213,24 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   }
 
-  // ⚠️ Alert for unattributed deposits
+  // Emit a warning when a deposit cannot be attributed to a user or contract
   if (!resolvedUserId && !resolvedContractId) {
-    console.warn(`[deposit] ⚠️  UNATTRIBUTED DEPOSIT: ${signature} - ${formatUiAmount(agg.values().next().value?.amount ?? 0n, SOL_DECIMALS)} SOL`);
+    console.warn(
+      `[deposit] UNATTRIBUTED DEPOSIT: ${signature} - ${formatUiAmount(agg.values().next().value?.amount ?? 0n, SOL_DECIMALS)} SOL`
+    );
   }
 
-  // compute status from requested finality
+  // Compute the final status and timestamp information from the transaction
   const when = tx.blockTime ? new Date(tx.blockTime * 1000).toISOString() : null;
   const status: "processed" | "confirmed" | "finalized" = GET_TX_FINALITY;
 
-  // upsert per-asset
+  // Upsert one row per aggregated asset entry into the deposits table
   for (const v of agg.values()) {
     const ui = formatUiAmount(v.amount, v.dec);
-    const fromMatch = inbound.find((z) => (z.mint ?? null) === (v.mint ?? null) && z.dec === v.dec && z.from)?.from ?? null;
+    const fromMatch = inbound.find(
+      (z) => (z.mint ?? null) === (v.mint ?? null) && z.dec === v.dec && z.from
+    )?.from ?? null;
+
     const row = {
       user_id: resolvedUserId,
       contract_id: resolvedContractId,
@@ -216,64 +246,76 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
       ui_amount: ui,
       status,
       source: "rpc",
-      memo: ref ?? null
+      memo: ref ?? null,
     };
+
     const { error: upErr } = await db.from("deposits").upsert(row, { onConflict: "tx_sig,to_address,asset_key" });
     if (upErr) throw upErr;
-    
-    console.log(`[deposit] ✅ Ingested: ${signature} - ${ui} ${v.mint ?? 'SOL'} from ${fromMatch ?? 'unknown'} → contract: ${resolvedContractId ?? 'none'}`);
+
+    console.log(
+      `[deposit] Ingested: ${signature} - ${ui} ${v.mint ?? "SOL"} from ${fromMatch ?? "unknown"} → contract: ${resolvedContractId ?? "none"}`
+    );
   }
 
-  // ✅ FIX #2: Mark ref as used after successful deposit
+  // Mark the ref as used after a successful, linked deposit to prevent reuse
   if (ref && refWasValid && resolvedContractId) {
     const { error: markErr } = await db
       .from("contract_refs")
-      .update({ 
-        status: "used", 
-        updated_at: new Date().toISOString() 
+      .update({
+        status: "used",
+        updated_at: new Date().toISOString(),
       })
       .eq("ref_code", ref)
-      .eq("status", "active"); // Only update if still active (idempotent)
-    
+      .eq("status", "active"); // Maintain idempotency
+
     if (markErr) {
       console.error(`[deposit] Failed to mark ref as used: ${ref}`, markErr);
     } else {
-      console.log(`[deposit] ✅ Marked ref as used: ${ref} for contract ${resolvedContractId}`);
+      console.log(`[deposit] Marked ref as used: ${ref} for contract ${resolvedContractId}`);
     }
   }
 }
 
-// fetch signatures since cursor
+// This function collects new signatures since the last cursor, honoring pagination and backfill limits
 async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | null) {
   const out: Array<{ signature: string }> = [];
   let before: string | undefined;
   let fetched = 0;
+
   while (true) {
     const page = await conn.getSignaturesForAddress(target, { limit: SIGNATURE_BATCH_LIMIT, before });
     if (!page.length) break;
+
     let cursorHit = false;
     for (const s of page) {
       if (cursor && s.signature === cursor) { cursorHit = true; break; }
       out.push({ signature: s.signature });
+
+      // Enforce a backfill cap only when starting from no cursor
       if (!cursor) {
         fetched++;
-        if (INITIAL_BACKFILL_CAP !== Number.POSITIVE_INFINITY && fetched >= INITIAL_BACKFILL_CAP) return out.reverse();
+        if (INITIAL_BACKFILL_CAP !== Number.POSITIVE_INFINITY && fetched >= INITIAL_BACKFILL_CAP) {
+          return out.reverse();
+        }
       }
     }
+
     if (cursorHit) break;
     if (page.length < SIGNATURE_BATCH_LIMIT) break;
+
     const last = page[page.length - 1];
     if (!last?.signature || last.signature === before) break;
     before = last.signature;
   }
+
   return out.reverse();
 }
 
-// Send heartbeat
+// This function sends a periodic heartbeat to logs and stores liveness data in the database
 async function sendHeartbeat() {
   const now = Date.now();
   const uptime = Math.floor((now - lastHeartbeat) / 1000);
-  
+
   const heartbeatData = {
     status: "alive",
     timestamp: new Date().toISOString(),
@@ -286,9 +328,9 @@ async function sendHeartbeat() {
     },
   };
 
-  console.log("[deposit] 💓 Heartbeat:", heartbeatData);
+  console.log("[deposit] Heartbeat:", heartbeatData);
 
-  // Update Supabase app_settings for monitoring
+  // Persist heartbeat in app_settings for external monitoring
   try {
     await db.from("app_settings").upsert(
       {
@@ -298,75 +340,87 @@ async function sendHeartbeat() {
       { onConflict: "key" }
     );
   } catch (error) {
-    console.error("[deposit] ⚠️  Failed to update heartbeat in DB:", error);
+    console.error("[deposit] Failed to update heartbeat in DB:", error);
   }
 
   lastHeartbeat = now;
 }
 
-// Main poll loop
+// This IIFE launches the infinite polling loop that reads new signatures and ingests deposits
 (async () => {
-  console.log("[deposit] 🚀 Starting deposit indexer", { 
-    rpc: RPC, 
-    finality: GET_TX_FINALITY, 
+  console.log("[deposit] Starting deposit indexer", {
+    rpc: RPC,
+    finality: GET_TX_FINALITY,
     treasury: TREASURY,
     pollInterval: `${POLL_MS}ms`,
     maxRetries: MAX_RETRIES,
-    heartbeatInterval: `${HEARTBEAT_INTERVAL_MS}ms`
+    heartbeatInterval: `${HEARTBEAT_INTERVAL_MS}ms`,
   });
-  
-  // Start heartbeat timer
+
+  // Start the heartbeat timer for periodic liveness reporting
   const heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-  
-  // Send initial heartbeat
+
+  // Send an initial heartbeat on startup
   await sendHeartbeat();
-  
+
+  // Enter the infinite processing loop to fetch, decode, and ingest deposits
   for (;;) {
     try {
+      // Read the last seen signature cursor for the treasury
       const { data: cRow, error: cErr } = await db
         .from("deposit_cursors")
         .select("last_seen_sig")
         .eq("address", TREASURY)
         .maybeSingle();
-      
+
       if (cErr) throw cErr;
+
       const cursor = cRow?.last_seen_sig ?? null;
 
+      // Collect new signatures beyond the last cursor
       const sigs = await collectSignaturesSinceCursor(tKey, cursor);
-      if (!sigs.length) { 
-        await new Promise((r) => setTimeout(r, POLL_MS)); 
-        continue; 
+      if (!sigs.length) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        continue;
       }
 
-      console.log(`[deposit] 📥 Processing ${sigs.length} new signature(s)...`);
+      console.log(`[deposit] Processing ${sigs.length} new signature(s)...`);
 
+      // Process signatures in arrival order with retry semantics
       for (const s of sigs) {
         let processed = false;
-        let tx = null;
-        
-        // Retry transaction fetching with better error handling
+        let tx: VersionedTransactionResponse | null = null;
+
+        // Retry fetching the transaction from RPC with exponential backoff
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            tx = await conn.getTransaction(s.signature, { 
-              maxSupportedTransactionVersion: 0, 
-              commitment: GET_TX_FINALITY 
+            tx = await conn.getTransaction(s.signature, {
+              maxSupportedTransactionVersion: 0,
+              commitment: GET_TX_FINALITY,
             });
-            
+
             if (tx) {
-              break; // Success, exit retry loop
+              break;
             } else {
-              // Transaction not available yet
               if (attempt < MAX_RETRIES) {
                 const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-                console.warn(`[deposit] ⚠️  Transaction unavailable (attempt ${attempt}/${MAX_RETRIES}): ${s.signature}, retrying in ${delay}ms...`);
+                console.warn(
+                  `[deposit] Transaction unavailable (attempt ${attempt}/${MAX_RETRIES}): ${s.signature}, retrying in ${delay}ms...`
+                );
                 await new Promise((r) => setTimeout(r, delay));
               } else {
-                console.warn(`[deposit] ⚠️  Skipping transaction after ${MAX_RETRIES} attempts: ${s.signature}`);
+                console.warn(
+                  `[deposit] Skipping transaction after ${MAX_RETRIES} attempts: ${s.signature}`
+                );
                 totalErrors++;
               }
             }
           } catch (e) {
-            console.error(`[deposit] ❌ Get transaction error (attempt ${attempt}/${MAX_RETRIES}):`, s.signature, e);
+            console.error(
+              `[deposit] Get transaction error (attempt ${attempt}/${MAX_RETRIES}):`,
+              s.signature,
+              e
+            );
             if (attempt < MAX_RETRIES) {
               const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
               await new Promise((r) => setTimeout(r, delay));
@@ -375,8 +429,8 @@ async function sendHeartbeat() {
             }
           }
         }
-        
-        // If we got the transaction, try to ingest it with retry
+
+        // Retry ingesting the transaction with exponential backoff
         if (tx) {
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
@@ -384,9 +438,13 @@ async function sendHeartbeat() {
               processed = true;
               totalProcessed++;
               lastProcessedSignature = s.signature;
-              break; // Success, exit retry loop
+              break;
             } catch (e) {
-              console.error(`[deposit] ❌ Ingest error (attempt ${attempt}/${MAX_RETRIES}):`, s.signature, e);
+              console.error(
+                `[deposit] Ingest error (attempt ${attempt}/${MAX_RETRIES}):`,
+                s.signature,
+                e
+              );
               if (attempt < MAX_RETRIES) {
                 const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
                 await new Promise((r) => setTimeout(r, delay));
@@ -396,26 +454,29 @@ async function sendHeartbeat() {
             }
           }
         }
-        
-        // Update cursor if successfully processed
+
+        // Upsert the cursor when a signature is fully processed to maintain progress
         if (processed) {
-          const up = { 
-            address: TREASURY, 
-            last_seen_sig: s.signature, 
-            updated_at: new Date().toISOString() 
+          const up = {
+            address: TREASURY,
+            last_seen_sig: s.signature,
+            updated_at: new Date().toISOString(),
           };
-          
-          // Retry cursor update
+
+          // Retry updating the cursor to guard against transient DB failures
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
               const { error: uErr } = await db
                 .from("deposit_cursors")
                 .upsert(up, { onConflict: "address" });
-              
+
               if (uErr) throw uErr;
-              break; // Success
+              break;
             } catch (e) {
-              console.error(`[deposit] ❌ Cursor update error (attempt ${attempt}/${MAX_RETRIES}):`, e);
+              console.error(
+                `[deposit] Cursor update error (attempt ${attempt}/${MAX_RETRIES}):`,
+                e
+              );
               if (attempt === MAX_RETRIES) {
                 totalErrors++;
               } else {
@@ -426,12 +487,12 @@ async function sendHeartbeat() {
         }
       }
     } catch (e) {
-      console.error("[deposit] ❌ Loop error", e);
+      console.error("[deposit] Loop error", e);
       totalErrors++;
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   }
 })().catch((e) => {
-  console.error("💥 Fatal error:", e);
+  console.error("Fatal error:", e);
   process.exit(1);
 });
