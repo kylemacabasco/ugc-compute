@@ -17,6 +17,17 @@ const INITIAL_BACKFILL_CAP = 500;
 const SOL_DECIMALS = 9;
 const MEMO_PID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+// Heartbeat configuration
+const HEARTBEAT_INTERVAL_MS = 60000; // 1 minute
+let lastHeartbeat = Date.now();
+let lastProcessedSignature: string | null = null;
+let totalProcessed = 0;
+let totalErrors = 0;
+
 const conn = new Connection(RPC, { commitment: "confirmed" });
 const tKey = new PublicKey(TREASURY);
 
@@ -32,12 +43,12 @@ function formatUiAmount(amount: bigint, decimals: number) {
   return `${neg ? "-" : ""}${intPart}${frac ? "." + frac : ""}`;
 }
 
-// Extract inbound SOL + SPL transfers to target
+// extract inbound SOL + SPL transfers to target
 function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   const out: Array<{ mint: string | null; amount: bigint; dec: number; from?: string }> = [];
   if (!tx.meta) return out;
 
-  // Get account keys robustly
+  // get account keys robustly
   const msg: any = tx.transaction.message;
   const keys: PublicKey[] =
     (msg.staticAccountKeys as PublicKey[]) ??
@@ -88,12 +99,12 @@ function extractInbound(tx: VersionedTransactionResponse, target: PublicKey) {
   return out;
 }
 
-// Ingest one tx into public.deposits
+// ingest one tx into public.deposits
 async function ingest(signature: string, tx: VersionedTransactionResponse, treasury: string) {
   const inbound = extractInbound(tx, new PublicKey(treasury));
   if (!inbound.length) return;
 
-  // Aggregate per-asset
+  // aggregate per-asset
   const agg = new Map<string, { mint: string | null; amount: bigint; dec: number }>();
   for (const x of inbound) {
     const key = `${x.mint ?? "SOL"}:${x.dec}`;
@@ -102,7 +113,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     else agg.set(key, { mint: x.mint, amount: x.amount, dec: x.dec });
   }
 
-  // Parse memo and ref code
+  // parse memo and ref code
   let ref: string | null = null;
   try {
     const msg: any = tx?.transaction?.message;
@@ -131,7 +142,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   } catch {}
 
-  // Resolve contract + user via ref, else fallback by sender
+  // resolve contract + user via ref, else fallback by sender
   let resolvedContractId: string | null = null;
   let resolvedUserId: string | null = null;
   let refWasValid = false;
@@ -147,7 +158,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     if (refErr) throw refErr;
     
     if (refRow) {
-      // Check if ref has expired
+      // ✅ FIX #1: Check if ref has expired
       if (refRow.expires_at && new Date(refRow.expires_at) < new Date()) {
         console.warn(`[deposit] Expired ref: ${ref} for tx ${signature}`);
         // Still ingest deposit but don't link to contract
@@ -177,7 +188,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     }
   }
 
-  // Alert for unattributed deposits
+  // ⚠️ Alert for unattributed deposits
   if (!resolvedUserId && !resolvedContractId) {
     console.warn(`[deposit] ⚠️  UNATTRIBUTED DEPOSIT: ${signature} - ${formatUiAmount(agg.values().next().value?.amount ?? 0n, SOL_DECIMALS)} SOL`);
   }
@@ -213,6 +224,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     console.log(`[deposit] ✅ Ingested: ${signature} - ${ui} ${v.mint ?? 'SOL'} from ${fromMatch ?? 'unknown'} → contract: ${resolvedContractId ?? 'none'}`);
   }
 
+  // ✅ FIX #2: Mark ref as used after successful deposit
   if (ref && refWasValid && resolvedContractId) {
     const { error: markErr } = await db
       .from("contract_refs")
@@ -231,7 +243,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
   }
 }
 
-// Fetch signatures since cursor
+// fetch signatures since cursor
 async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | null) {
   const out: Array<{ signature: string }> = [];
   let before: string | undefined;
@@ -257,14 +269,57 @@ async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | 
   return out.reverse();
 }
 
+// Send heartbeat
+async function sendHeartbeat() {
+  const now = Date.now();
+  const uptime = Math.floor((now - lastHeartbeat) / 1000);
+  
+  const heartbeatData = {
+    status: "alive",
+    timestamp: new Date().toISOString(),
+    uptime_seconds: uptime,
+    treasury: TREASURY,
+    stats: {
+      total_processed: totalProcessed,
+      total_errors: totalErrors,
+      last_signature: lastProcessedSignature,
+    },
+  };
+
+  console.log("[deposit] 💓 Heartbeat:", heartbeatData);
+
+  // Update Supabase app_settings for monitoring
+  try {
+    await db.from("app_settings").upsert(
+      {
+        key: "deposit_indexer_heartbeat",
+        value: JSON.stringify(heartbeatData),
+      },
+      { onConflict: "key" }
+    );
+  } catch (error) {
+    console.error("[deposit] ⚠️  Failed to update heartbeat in DB:", error);
+  }
+
+  lastHeartbeat = now;
+}
+
 // Main poll loop
 (async () => {
   console.log("[deposit] 🚀 Starting deposit indexer", { 
     rpc: RPC, 
     finality: GET_TX_FINALITY, 
     treasury: TREASURY,
-    pollInterval: `${POLL_MS}ms`
+    pollInterval: `${POLL_MS}ms`,
+    maxRetries: MAX_RETRIES,
+    heartbeatInterval: `${HEARTBEAT_INTERVAL_MS}ms`
   });
+  
+  // Start heartbeat timer
+  const heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+  
+  // Send initial heartbeat
+  await sendHeartbeat();
   
   for (;;) {
     try {
@@ -287,41 +342,96 @@ async function collectSignaturesSinceCursor(target: PublicKey, cursor: string | 
 
       for (const s of sigs) {
         let processed = false;
-        try {
-          const tx = await conn.getTransaction(s.signature, { 
-            maxSupportedTransactionVersion: 0, 
-            commitment: GET_TX_FINALITY 
-          });
-          
-          if (tx) { 
-            await ingest(s.signature, tx, TREASURY); 
-            processed = true; 
-          } else { 
-            console.warn("[deposit] ⚠️  Transaction unavailable at finality", s.signature); 
+        let tx = null;
+        
+        // Retry transaction fetching with better error handling
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            tx = await conn.getTransaction(s.signature, { 
+              maxSupportedTransactionVersion: 0, 
+              commitment: GET_TX_FINALITY 
+            });
+            
+            if (tx) {
+              break; // Success, exit retry loop
+            } else {
+              // Transaction not available yet
+              if (attempt < MAX_RETRIES) {
+                const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+                console.warn(`[deposit] ⚠️  Transaction unavailable (attempt ${attempt}/${MAX_RETRIES}): ${s.signature}, retrying in ${delay}ms...`);
+                await new Promise((r) => setTimeout(r, delay));
+              } else {
+                console.warn(`[deposit] ⚠️  Skipping transaction after ${MAX_RETRIES} attempts: ${s.signature}`);
+                totalErrors++;
+              }
+            }
+          } catch (e) {
+            console.error(`[deposit] ❌ Get transaction error (attempt ${attempt}/${MAX_RETRIES}):`, s.signature, e);
+            if (attempt < MAX_RETRIES) {
+              const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+              await new Promise((r) => setTimeout(r, delay));
+            } else {
+              totalErrors++;
+            }
           }
-        } catch (e) {
-          console.error("[deposit] ❌ Get/ingest error", s.signature, e);
         }
         
+        // If we got the transaction, try to ingest it with retry
+        if (tx) {
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              await ingest(s.signature, tx, TREASURY);
+              processed = true;
+              totalProcessed++;
+              lastProcessedSignature = s.signature;
+              break; // Success, exit retry loop
+            } catch (e) {
+              console.error(`[deposit] ❌ Ingest error (attempt ${attempt}/${MAX_RETRIES}):`, s.signature, e);
+              if (attempt < MAX_RETRIES) {
+                const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+                await new Promise((r) => setTimeout(r, delay));
+              } else {
+                totalErrors++;
+              }
+            }
+          }
+        }
+        
+        // Update cursor if successfully processed
         if (processed) {
           const up = { 
             address: TREASURY, 
             last_seen_sig: s.signature, 
             updated_at: new Date().toISOString() 
           };
-          const { error: uErr } = await db
-            .from("deposit_cursors")
-            .upsert(up, { onConflict: "address" });
           
-          if (uErr) throw uErr;
+          // Retry cursor update
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              const { error: uErr } = await db
+                .from("deposit_cursors")
+                .upsert(up, { onConflict: "address" });
+              
+              if (uErr) throw uErr;
+              break; // Success
+            } catch (e) {
+              console.error(`[deposit] ❌ Cursor update error (attempt ${attempt}/${MAX_RETRIES}):`, e);
+              if (attempt === MAX_RETRIES) {
+                totalErrors++;
+              } else {
+                await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+              }
+            }
+          }
         }
       }
     } catch (e) {
       console.error("[deposit] ❌ Loop error", e);
+      totalErrors++;
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   }
 })().catch((e) => {
-  console.error("Fatal error:", e);
+  console.error("💥 Fatal error:", e);
   process.exit(1);
 });

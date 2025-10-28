@@ -146,7 +146,7 @@ create index if not exists idx_deposits_contract_created
 -- Enable RLS
 alter table public.deposits enable row level security;
 
--- RLS: Users can only read their own deposits
+-- RLS: Users can read their own deposits (by user_id OR by from_address)
 drop policy if exists "deposits: users read own" on public.deposits;
 create policy "deposits: users read own"
 on public.deposits for select
@@ -154,11 +154,16 @@ using (
   exists (
     select 1
     from public.users u
-    where u.id = public.deposits.user_id
-      and u.wallet_address = coalesce(
-        nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'wallet',
-        ''
-      )
+    where (
+      -- Match by user_id (for attributed deposits)
+      (u.id = public.deposits.user_id)
+      -- OR match by from_address (for unattributed deposits from their wallet)
+      or (u.wallet_address = public.deposits.from_address)
+    )
+    and u.wallet_address = coalesce(
+      nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'wallet',
+      ''
+    )
   )
 );
 
