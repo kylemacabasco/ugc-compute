@@ -1,27 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import WalletButton from "./components/WalletButton";
 import UsernameForm from "./components/UsernameForm";
-import UserProfile from "./components/UserProfile";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import ContractCard, { ApiContract } from "@/app/components/ContractCard";
 
 export default function HomePage() {
+  const router = useRouter();
   const { connected } = useWallet();
   const { user, loading } = useAuth();
-  const [showProfile, setShowProfile] = useState(false);
   const [contracts, setContracts] = useState<ApiContract[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showUsernameForm, setShowUsernameForm] = useState(false);
 
   useEffect(() => {
     if (connected && user) {
       fetchContracts();
+      // Show username form on first login if no username
+      if (!user.username) {
+        setShowUsernameForm(true);
+      }
     }
   }, [connected, user]);
+
+  // Redirect to profile if user has no username and they're not on the username form
+  useEffect(() => {
+    if (user && !user.username && !showUsernameForm) {
+      router.push("/profile");
+    }
+  }, [user, showUsernameForm, router]);
 
   const fetchContracts = async () => {
     try {
@@ -67,41 +79,14 @@ export default function HomePage() {
   }
 
   // Show username form for first-time users without username
-  if (user && !user.username && !showProfile) {
+  if (user && !user.username && showUsernameForm) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
         <UsernameForm 
           isFirstTime={true} 
-          onComplete={() => {}} // Username created - user.username will be set, so they go to contract page
-          onSkip={() => setShowProfile(true)} // Skipped - go to profile page
+          onComplete={() => setShowUsernameForm(false)} // Username created - go to contract page
+          onSkip={() => router.push("/profile")} // Skipped - redirect to profile page to set username
         />
-      </div>
-    );
-  }
-
-  // Show profile or main app interface
-  if (showProfile) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        {/* Header with back button */}
-        <header className="border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center h-16">
-              <button
-                onClick={() => setShowProfile(false)}
-                className="flex items-center text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-              >
-                ← Back to Home
-              </button>
-              <h1 className="ml-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Profile</h1>
-            </div>
-          </div>
-        </header>
-
-        {/* Profile content */}
-        <div className="flex items-center justify-center py-8 px-4">
-          <UserProfile />
-        </div>
       </div>
     );
   }
@@ -128,12 +113,12 @@ export default function HomePage() {
                 </span>
               </div>
               <WalletMultiButton className="!text-xs !py-2 !px-3" />
-              <button
-                onClick={() => setShowProfile(true)}
+              <Link
+                href="/profile"
                 className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm font-medium"
               >
                 Profile
-              </button>
+              </Link>
             </div>
           </div>
         </div>
