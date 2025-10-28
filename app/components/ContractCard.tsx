@@ -12,6 +12,7 @@ export interface ApiContract {
   total_submission_views: number;
   is_completed: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 interface ContractCardProps {
@@ -19,6 +20,25 @@ interface ContractCardProps {
 }
 
 export default function ContractCard({ contract }: ContractCardProps) {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+    const diffInDays = diffInHours / 24;
+
+    if (diffInHours < 1) {
+      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+      return `${diffInMinutes}m ago`;
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h ago`;
+    } else if (diffInDays < 7) {
+      return `${Math.floor(diffInDays)}d ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
   return (
     <Link
       href={`/contracts/${contract.id}`}
@@ -80,6 +100,10 @@ export default function ContractCard({ contract }: ContractCardProps) {
             {contract.total_submission_views.toLocaleString()} total views
           </div>
         )}
+
+        <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 text-xs text-gray-400 dark:text-slate-500">
+          Last updated {formatDate(contract.updated_at)}
+        </div>
       </div>
     </Link>
   );
