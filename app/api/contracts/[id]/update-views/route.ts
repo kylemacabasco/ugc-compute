@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Create a connection to Supabase
+// Read/write contract and submission data
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -103,7 +105,11 @@ export async function POST(
         (s: any) => s.video_url === result.url
       );
 
-      if (submission && result.viewCount !== null && result.viewCount !== undefined) {
+      if (
+        submission &&
+        result.viewCount !== null &&
+        result.viewCount !== undefined
+      ) {
         const newViewCount = result.viewCount;
         const oldViewCount = submission.view_count || 0;
 
@@ -120,9 +126,11 @@ export async function POST(
             );
             failedCount++;
           } else {
-            const totalEarnedAmount = (newViewCount / 1000) * contract.rate_per_1k_views;
+            const totalEarnedAmount =
+              (newViewCount / 1000) * contract.rate_per_1k_views;
             const newViews = newViewCount - oldViewCount;
-            const incrementalEarned = (newViews / 1000) * contract.rate_per_1k_views;
+            const incrementalEarned =
+              (newViews / 1000) * contract.rate_per_1k_views;
 
             const { error: updateSubmissionError } = await supabase
               .from("submissions")
