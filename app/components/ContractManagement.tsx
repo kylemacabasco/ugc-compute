@@ -41,9 +41,14 @@ export default function ContractManagement() {
     try {
       setIsLoading(true);
       
-      // Fetch all contracts
-      const contractsRes = await fetch("/api/contracts");
+      // Fetch all contracts and user submissions in parallel
+      const [contractsRes, submissionsRes] = await Promise.all([
+        fetch("/api/contracts"),
+        fetch(`/api/submissions?user_id=${user.id}`)
+      ]);
+      
       const allContracts = await contractsRes.json();
+      const userSubmissions = await submissionsRes.json();
       
       // Filter contracts created by the user
       const userCreated = allContracts.filter(
@@ -51,28 +56,6 @@ export default function ContractManagement() {
       );
       
       setCreatedContracts(userCreated);
-
-      // Fetch submissions from all contracts and filter by user
-      const submissionsPromises = allContracts.map((contract: any) =>
-        fetch(`/api/contracts/${contract.id}/submissions`)
-          .then(res => res.json())
-          .catch(() => [])
-      );
-      
-      const allSubmissionsArrays = await Promise.all(submissionsPromises);
-      const allSubmissions = allSubmissionsArrays.flat();
-      
-      // Filter submissions by current user and add contract info
-      const userSubmissions = allSubmissions
-        .filter((s: any) => s.user_id === user?.id)
-        .map((s: any) => ({
-          ...s,
-          contract: {
-            id: s.contract_id,
-            title: allContracts.find((c: any) => c.id === s.contract_id)?.title || "Unknown"
-          }
-        }));
-      
       setSubmissions(userSubmissions);
     } catch (error) {
       console.error("Error fetching user contracts:", error);

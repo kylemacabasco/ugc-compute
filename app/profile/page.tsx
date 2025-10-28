@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import UserProfile from "@/app/components/UserProfile";
 import UsernameForm from "@/app/components/UsernameForm";
@@ -14,18 +15,21 @@ export default function ProfilePage() {
   const router = useRouter();
 
   // Redirect if not connected
-  if (!connected && !loading) {
-    router.push("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!connected && !loading) {
+      router.push("/");
+    }
+  }, [connected, loading, router]);
 
-  // Show loading state
-  if (loading) {
+  // Show loading state or redirecting
+  if (loading || !connected) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="text-center">
           <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading…</p>
+          <p className="text-slate-600 dark:text-slate-400">
+            {!connected ? "Redirecting..." : "Loading…"}
+          </p>
         </div>
       </div>
     );
