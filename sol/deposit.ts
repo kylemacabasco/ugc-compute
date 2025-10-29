@@ -7,8 +7,8 @@ import { createSupabaseServiceClient } from "../lib/supabase";
 
 const db = createSupabaseServiceClient();
 
-const RPC = process.env.SOLANA_RPC_URL;
-const TREASURY = process.env.TREASURY_ADDRESS;
+const RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+const TREASURY = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
 if (!RPC) throw new Error("SOLANA_RPC_URL is required");
 if (!TREASURY) throw new Error("TREASURY_ADDRESS is required");
 

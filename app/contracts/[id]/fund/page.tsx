@@ -116,11 +116,6 @@ export default function FundContractPage() {
       if (!activateResponse.ok) {
         console.warn("Failed to activate contract automatically");
       }
-
-      // Redirect after a short delay
-      setTimeout(() => {
-        router.push(`/contracts/${params.id}`);
-      }, 2000);
     } catch (err) {
       console.error("Deposit error:", err);
       setError(err instanceof Error ? err.message : "Failed to deposit");
@@ -196,19 +191,25 @@ export default function FundContractPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Deposit Successful!
             </h2>
-            <p className="text-gray-600 mb-4">
-              Your contract has been funded and is now active!
+            <p className="text-gray-600 mb-6">
+              Your contract has been funded and is now open for submissions!
             </p>
             {txSignature && (
               <a
-                href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
+                href={`https://explorer.solana.com/tx/${txSignature}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm"
+                className="text-blue-600 hover:underline text-sm block mb-6"
               >
                 View transaction on Solana Explorer →
               </a>
             )}
+            <Link
+              href={`/contracts/${params.id}`}
+              className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+              Back to Contract
+            </Link>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow p-8">
