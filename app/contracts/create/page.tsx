@@ -49,7 +49,8 @@ export default function CreateContractPage() {
       }
 
       const contract = await response.json();
-      router.push(`/contracts/${contract.id}`);
+      // Redirect to funding page to deposit SOL
+      router.push(`/contracts/${contract.id}/fund`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create contract"

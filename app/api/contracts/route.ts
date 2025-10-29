@@ -143,7 +143,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data, { status: 201 });
+    // Update the slug to match the contract ID
+    const { data: updatedData, error: slugError } = await supabase
+      .from("contracts")
+      .update({ slug: data.id })
+      .eq("id", data.id)
+      .select()
+      .single();
+
+    if (slugError) {
+      console.error("Error setting contract slug:", slugError);
+      // Still return the contract even if slug update fails
+      return NextResponse.json(data, { status: 201 });
+    }
+
+    return NextResponse.json(updatedData, { status: 201 });
   } catch (error) {
     console.error("Error in POST /api/contracts:", error);
     return NextResponse.json(
