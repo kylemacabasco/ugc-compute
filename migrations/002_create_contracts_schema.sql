@@ -10,9 +10,7 @@ CREATE TABLE IF NOT EXISTS contracts (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT NOT NULL DEFAULT 'draft'
-        CHECK (status IN ('draft', 'awaiting_funding', 'open', 'paused', 'filled', 'paid_out', 'archived')),
-    payout_status TEXT NOT NULL DEFAULT 'idle'
-        CHECK (payout_status IN ('idle', 'pending', 'processing', 'retry', 'paid')),
+        CHECK (status IN ('draft', 'awaiting_funding', 'open', 'paused', 'completed', 'archived')),
     contract_amount NUMERIC(20,2) NOT NULL CHECK (contract_amount > 0),
     total_value NUMERIC(20,2) GENERATED ALWAYS AS (contract_amount) STORED,
     claimed_value NUMERIC(20,2) NOT NULL DEFAULT 0,
@@ -30,18 +28,19 @@ CREATE TABLE IF NOT EXISTS contracts (
     asset_count INTEGER NOT NULL DEFAULT 0,
     auto_payout_enabled BOOLEAN NOT NULL DEFAULT true,
     monitor_checkpoint TIMESTAMP WITH TIME ZONE,
-    last_filled_at TIMESTAMP WITH TIME ZONE,
-    last_paid_out_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     creator_id UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status, payout_status);
+CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);
 CREATE INDEX IF NOT EXISTS idx_contracts_creator ON contracts(creator_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_funding ON contracts(deposit_status)
     WHERE deposit_required IS TRUE;
+CREATE INDEX IF NOT EXISTS idx_contracts_completed ON contracts(completed_at)
+    WHERE completed_at IS NOT NULL;
 
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 

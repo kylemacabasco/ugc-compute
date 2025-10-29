@@ -13,7 +13,7 @@ async function setupMultisig() {
   if (!RPC_URL) throw new Error("SOLANA_RPC_URL not set");
 
   const connection = new Connection(RPC_URL, "confirmed");
-  console.log("Connected to:", RPC_URL);
+  console.log("✅ Connected to:", RPC_URL);
 
   // ============================================================================
   // 2. LOAD TREASURY KEYPAIR (Creator of the multi-sig)
@@ -27,14 +27,14 @@ async function setupMultisig() {
   }
 
   const creator = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
-  console.log(" Creator wallet:", creator.publicKey.toBase58());
+  console.log("✅ Creator wallet:", creator.publicKey.toBase58());
 
   // Check balance
   const balance = await connection.getBalance(creator.publicKey);
-  console.log(" Balance:", balance / LAMPORTS_PER_SOL, "SOL");
+  console.log("💰 Balance:", balance / LAMPORTS_PER_SOL, "SOL");
 
   if (balance < 0.1 * LAMPORTS_PER_SOL) {
-    console.log("\n Low balance! Get devnet SOL:");
+    console.log("\n⚠️  Low balance! Get devnet SOL:");
     console.log("   solana airdrop 2", creator.publicKey.toBase58(), "--url devnet");
     return;
   }
@@ -57,7 +57,7 @@ async function setupMultisig() {
     // },
   ];
 
-  console.log("\n Multi-sig Members:");
+  console.log("\n👥 Multi-sig Members:");
   members.forEach((m, i) => console.log(`   ${i + 1}. ${m.key.toBase58()}`));
 
   // ============================================================================
@@ -65,7 +65,7 @@ async function setupMultisig() {
   // ============================================================================
   const threshold = 1; // 1-of-1 for testing, increase when adding more members
   
-  console.log("\n Creating multi-sig with threshold:", threshold);
+  console.log("\n⚙️  Creating multi-sig with threshold:", threshold);
 
   // Generate a unique create key for this multi-sig
   const createKey = Keypair.generate();
@@ -90,7 +90,7 @@ async function setupMultisig() {
       members,
     });
 
-    console.log("\n Multi-sig created!");
+    console.log("\n✅ Multi-sig created!");
     console.log("   Signature:", signature);
     console.log("   Multi-sig Address:", multisigPda.toBase58());
 
@@ -100,16 +100,16 @@ async function setupMultisig() {
       index: 0, // Default vault index
     });
 
-    console.log("\n Vault Address:", vaultPda.toBase58());
-    console.log("\n Add these to your .env:");
+    console.log("\n💎 Vault Address:", vaultPda.toBase58());
+    console.log("\n📋 Add these to your .env:");
     console.log(`SQUADS_MULTISIG_ADDRESS=${multisigPda.toBase58()}`);
     console.log(`SQUADS_VAULT_ADDRESS=${vaultPda.toBase58()}`);
 
-    console.log("\n Fund the vault with:");
+    console.log("\n💰 Fund the vault with:");
     console.log(`solana transfer ${vaultPda.toBase58()} 1 --url devnet`);
 
   } catch (error: any) {
-    console.error("\n Error creating multi-sig:", error.message);
+    console.error("\n❌ Error creating multi-sig:", error.message);
     throw error;
   }
 }

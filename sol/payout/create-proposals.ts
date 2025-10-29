@@ -1,4 +1,4 @@
-// Create Squads proposals - Updated to match your schema
+// Create Squads proposals for contract payouts
 // Location: sol/payout/create-proposals.ts
 import "dotenv/config";
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage } from "@solana/web3.js";
@@ -96,7 +96,7 @@ export async function processContractPayouts(contractId: string) {
   
   for (const earning of earnings) {
     const { data: wd, error: wdError } = await db
-      .from("withdrawals")
+      .from("withdrawal_payouts")
       .insert({
         user_id: earning.userId,
         contract_id: contractId,

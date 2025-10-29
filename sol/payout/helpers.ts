@@ -1,4 +1,4 @@
-// Updated helpers to match your exact schema
+// Helper functions for Squads Multi-sig Payouts
 // Location: sol/payout/helpers.ts
 import "dotenv/config";
 import { type SupabaseClient } from "@supabase/supabase-js";
@@ -95,7 +95,7 @@ export async function markWithdrawalProposalCreated(sr: SupabaseClient, params: 
   squadsTransactionIndex: number;
 }) {
   const { data, error } = await sr
-    .from("withdrawals")
+    .from("withdrawal_payouts")
     .update({ 
       status: "proposal_created" as WithdrawalStatus,
       squads_proposal_id: params.squadsProposalId,
@@ -124,7 +124,7 @@ export async function markWithdrawalBroadcast(sr: SupabaseClient, params: {
   if (params.blockTimeIso) patch.block_time = params.blockTimeIso;
   
   const { data, error } = await sr
-    .from("withdrawals")
+    .from("withdrawal_payouts")
     .update(patch)
     .eq("id", params.withdrawalId)
     .select()
@@ -145,7 +145,7 @@ export async function markWithdrawalConfirmed(sr: SupabaseClient, params: {
   if (params.blockTimeIso) patch.block_time = params.blockTimeIso;
   
   const { data, error } = await sr
-    .from("withdrawals")
+    .from("withdrawal_payouts")
     .update(patch)
     .eq("id", params.withdrawalId)
     .select()
@@ -157,7 +157,7 @@ export async function markWithdrawalConfirmed(sr: SupabaseClient, params: {
 
 export async function markWithdrawalFinalized(sr: SupabaseClient, withdrawalId: string) {
   const { data, error } = await sr
-    .from("withdrawals")
+    .from("withdrawal_payouts")
     .update({ 
       status: "finalized" as WithdrawalStatus,
       processed_at: new Date().toISOString()
@@ -176,7 +176,7 @@ export async function markWithdrawalFailed(
   reason: string
 ) {
   const { data, error } = await sr
-    .from("withdrawals")
+    .from("withdrawal_payouts")
     .update({ 
       status: "failed" as WithdrawalStatus, 
       fail_reason: reason.slice(0, 512)
