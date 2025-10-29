@@ -38,13 +38,35 @@ export default function ContractDetailPage() {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [isDistributing, setIsDistributing] = useState(false);
   const [payoutMessage, setPayoutMessage] = useState<string | null>(null);
+  const [payoutsExist, setPayoutsExist] = useState(false);
+  const [totalDeposited, setTotalDeposited] = useState<number>(0);
   const [submissionsRefreshKey, setSubmissionsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (params.id) {
       fetchContract();
+      fetchPayoutSummary();
+      fetchDepositsSummary();
     }
   }, [params.id]);
+  const fetchDepositsSummary = async () => {
+    try {
+      const response = await fetch(`/api/contracts/${params.id}/deposits/summary`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setTotalDeposited(Number(data?.total_deposited || 0));
+    } catch {}
+  };
+
+  const fetchPayoutSummary = async () => {
+    try {
+      const response = await fetch(`/api/contracts/${params.id}/payouts/summary`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setPayoutsExist((data?.counts?.total || 0) > 0);
+    } catch {}
+  };
+
 
   const fetchContract = async () => {
     try {
@@ -234,6 +256,12 @@ export default function ContractDetailPage() {
                 {contract.total_submission_views.toLocaleString()}
               </p>
             </div>
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-sm text-gray-500 mb-1">Deposited</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {totalDeposited.toFixed(2)} SOL
+              </p>
+            </div>
           </div>
 
           {/* Progress Bar */}
@@ -255,7 +283,7 @@ export default function ContractDetailPage() {
               />
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              {contract.calculated_earned.toFixed(2)} of {contract.contract_amount} SOL allocated
+              {Math.min(contract.calculated_earned, totalDeposited).toFixed(2)} of {contract.contract_amount} SOL allocated (Deposited: {totalDeposited.toFixed(2)} SOL)
             </p>
           </div>
 
@@ -282,10 +310,16 @@ export default function ContractDetailPage() {
             <div className="mb-6">
               <button
                 onClick={handleDistributePayouts}
-                disabled={isDistributing}
+                disabled={isDistributing || payoutsExist || totalDeposited < contract.contract_amount}
                 className="w-full px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isDistributing ? "Distributing…" : "Distribute Payouts"}
+                {payoutsExist
+                  ? "Payouts Already Created"
+                  : totalDeposited < contract.contract_amount
+                  ? "Awaiting Funding"
+                  : isDistributing
+                  ? "Distributing…"
+                  : "Distribute Payouts"}
               </button>
               {payoutMessage && (
                 <p className={`text-sm mt-2 text-center ${payoutMessage.startsWith("Created") ? "text-green-600" : "text-red-600"}`}>
