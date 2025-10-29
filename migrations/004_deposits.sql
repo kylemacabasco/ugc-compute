@@ -23,7 +23,7 @@ drop trigger if exists trg_deposit_cursors_touch on public.deposit_cursors;
 create trigger trg_deposit_cursors_touch before update on public.deposit_cursors
 for each row execute function public.touch_updated_at();
 
--- Deposits (tracks contract via contract_id)
+-- Deposits (tracks contract via contract_id only - no reference_code needed)
 create table if not exists public.deposits (
   id uuid primary key default gen_random_uuid(),
 
@@ -45,8 +45,7 @@ create table if not exists public.deposits (
   source text not null default 'rpc' check (source in ('rpc','webhook','backfill')),
   memo   text,
 
-  reference_code text,
-  contract_id    uuid references public.contracts(id) on delete set null,
+  contract_id uuid references public.contracts(id) on delete set null,
 
   asset_key text generated always as (coalesce(mint, 'SOL')) stored,
 
@@ -67,7 +66,6 @@ create index if not exists idx_deposits_user_id        on public.deposits (user_
 create index if not exists idx_deposits_to_address     on public.deposits (to_address);
 create index if not exists idx_deposits_tx_sig         on public.deposits (tx_sig);
 create index if not exists idx_deposits_contract_id    on public.deposits (contract_id);
-create index if not exists idx_deposits_reference      on public.deposits (reference_code);
 create index if not exists idx_deposits_addr_slot_desc on public.deposits (to_address, slot desc);
 create index if not exists idx_deposits_user_created   on public.deposits(user_id, created_at desc);
 create index if not exists idx_deposits_contract_created
@@ -113,14 +111,13 @@ begin
   allowed_same_row :=
        ((old.user_id is null and new.user_id is not null) or (new.user_id = old.user_id))
    and ((old.contract_id is null and new.contract_id is not null) or (new.contract_id = old.contract_id))
-   and ((old.memo is null and new.memo is not null) or (new.memo = old.memo))
-   and ((old.reference_code is null and new.reference_code is not null) or (new.reference_code = old.reference_code));
+   and ((old.memo is null and new.memo is not null) or (new.memo = old.memo));
 
   if not allowed_same_row then
-    if (row_to_json(new) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'reference_code')
-       <> (row_to_json(old) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'reference_code')
+    if (row_to_json(new) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo')
+       <> (row_to_json(old) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo')
     then
-      raise exception 'only status plus one-time user_id/contract_id/memo/reference_code is allowed';
+      raise exception 'only status plus one-time user_id/contract_id/memo is allowed';
     end if;
   end if;
 
@@ -134,3 +131,8 @@ drop trigger if exists trg_deposits_status_guard on public.deposits;
 create trigger trg_deposits_status_guard
 before update on public.deposits
 for each row execute function public.deposits_status_guard();
+
+-- Comments
+COMMENT ON TABLE deposits IS 'Tracks incoming SOL/token deposits to treasury, linked to contracts via contract_id';
+COMMENT ON COLUMN deposits.contract_id IS 'Direct link to the contract being funded';
+COMMENT ON COLUMN deposits.memo IS 'Optional memo from transaction or system note';

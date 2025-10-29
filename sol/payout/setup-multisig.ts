@@ -1,118 +1,128 @@
-// Setup Squads Multi-sig (One-time setup)
-// Location: sol/payout/setup-multisig.ts
+// sol/payout/setup-multisig.ts
 import "dotenv/config";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import {
+  Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction,
+  sendAndConfirmTransaction
+} from "@solana/web3.js";
 import * as multisig from "@sqds/multisig";
 import bs58 from "bs58";
 
 async function setupMultisig() {
-  // ============================================================================
-  // 1. SETUP CONNECTION
-  // ============================================================================
-  const RPC_URL = process.env.SOLANA_RPC_URL;
-  if (!RPC_URL) throw new Error("SOLANA_RPC_URL not set");
+  const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+  if (!RPC_URL) throw new Error("NEXT_PUBLIC_SOLANA_RPC_URL not set");
 
   const connection = new Connection(RPC_URL, "confirmed");
-  console.log("✅ Connected to:", RPC_URL);
+  console.log("Connected to:", RPC_URL);
 
-  // ============================================================================
-  // 2. LOAD TREASURY KEYPAIR (Creator of the multi-sig)
-  // ============================================================================
-  // Option A: From base58 private key
   const PRIVATE_KEY = process.env.TREASURY_PRIVATE_KEY;
-  if (!PRIVATE_KEY) {
-    throw new Error(
-      "TREASURY_PRIVATE_KEY not set. Generate one with: solana-keygen new"
-    );
-  }
+  if (!PRIVATE_KEY) throw new Error("TREASURY_PRIVATE_KEY not set");
 
   const creator = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
-  console.log("✅ Creator wallet:", creator.publicKey.toBase58());
+  console.log("Creator wallet:", creator.publicKey.toBase58());
 
-  // Check balance
   const balance = await connection.getBalance(creator.publicKey);
-  console.log("💰 Balance:", balance / LAMPORTS_PER_SOL, "SOL");
-
-  if (balance < 0.1 * LAMPORTS_PER_SOL) {
-    console.log("\n⚠️  Low balance! Get devnet SOL:");
-    console.log("   solana airdrop 2", creator.publicKey.toBase58(), "--url devnet");
-    return;
+  console.log("Balance:", balance / LAMPORTS_PER_SOL, "SOL");
+  if (balance < 0.02 * LAMPORTS_PER_SOL) {
+    console.log("Warning: top up to ~0.02 SOL to cover rent/fees.");
   }
 
-  // ============================================================================
-  // 3. DEFINE MULTI-SIG MEMBERS
-  // ============================================================================
-  // For testing with ONE user, we'll use the creator as the only member
-  // Later, add more members for true multi-sig
-  
-  const members = [
-    {
-      key: creator.publicKey,
-      permissions: multisig.types.Permissions.all(), // Full permissions
-    },
-    // Add more members here later:
-    // {
-    //   key: new PublicKey("MEMBER_2_PUBKEY"),
-    //   permissions: multisig.types.Permissions.all(),
-    // },
-  ];
+  // Use SAME program id everywhere and correct cluster
+  const PROGRAM_ID = new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
 
-  console.log("\n👥 Multi-sig Members:");
-  members.forEach((m, i) => console.log(`   ${i + 1}. ${m.key.toBase58()}`));
-
-  // ============================================================================
-  // 4. CREATE MULTI-SIG
-  // ============================================================================
-  const threshold = 1; // 1-of-1 for testing, increase when adding more members
-  
-  console.log("\n⚙️  Creating multi-sig with threshold:", threshold);
-
-  // Generate a unique create key for this multi-sig
+  // Required in Squads v4: createKey must also sign
   const createKey = Keypair.generate();
 
-  // Derive the multi-sig PDA
+  // Multisig PDA (SDK helper; pass programId explicitly)
   const [multisigPda] = multisig.getMultisigPda({
     createKey: createKey.publicKey,
+    programId: PROGRAM_ID,
   });
 
-  console.log("📝 Multi-sig PDA:", multisigPda.toBase58());
+  // Rent collector PDA (your SDK doesn't have getRentCollectorPda → derive with correct seeds)
+  const [rentCollectorPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("rent_collector"), multisigPda.toBuffer()],
+    PROGRAM_ID
+  );
+
+  console.log("\nMembers:");
+  console.log("  1.", creator.publicKey.toBase58());
+  console.log("Threshold: 1");
+  console.log("Multisig PDA:", multisigPda.toBase58());
+  console.log("Rent Collector PDA:", rentCollectorPda.toBase58());
 
   try {
-    // Create the multi-sig account
-    const signature = await multisig.rpc.multisigCreate({
+    // Build the instruction via SDK
+    const ix = await multisig.rpc.multisigCreateV2({
       connection,
+      programId: PROGRAM_ID,
       createKey,
       creator,
       multisigPda,
-      configAuthority: null, // Can be set to upgrade config later
-      timeLock: 0, // No time delay for testing
-      threshold,
-      members,
+      rentCollector: rentCollectorPda,
+      treasury: creator.publicKey,
+      configAuthority: creator.publicKey,
+      threshold: 1,
+      timeLock: 0,
+      members: [
+        { key: creator.publicKey, permissions: multisig.types.Permissions.all() },
+      ],
+      // NOTE: some SDK versions return a signature directly; others return an Instruction.
+      // If yours returns a signature, you can skip the manual tx below and just confirm it.
+      // The block below works when `multisig.rpc.multisigCreateV2` returns an Instruction.
     });
 
-    console.log("\n✅ Multi-sig created!");
-    console.log("   Signature:", signature);
-    console.log("   Multi-sig Address:", multisigPda.toBase58());
+    // If your SDK returns a signature (string), use this simpler path:
+    // const sig = await multisig.rpc.multisigCreateV2({ ...same args... });
+    // await connection.confirmTransaction(
+    //   { signature: sig, ...(await connection.getLatestBlockhash()) },
+    //   "confirmed"
+    // );
 
-    // Derive the vault (where funds are held)
+    // If it returned an Instruction instead:
+    // const tx = new Transaction().add(ix);
+    // const sig = await sendAndConfirmTransaction(connection, tx, [creator, createKey], { commitment: "confirmed" });
+
+    // But your previous code suggested it returned a signature, so keep this:
+    const signature = await multisig.rpc.multisigCreateV2({
+      connection,
+      programId: PROGRAM_ID,
+      createKey,
+      creator,
+      multisigPda,
+      rentCollector: rentCollectorPda,
+      treasury: creator.publicKey,
+      configAuthority: creator.publicKey,
+      threshold: 1,
+      timeLock: 0,
+      members: [
+        { key: creator.publicKey, permissions: multisig.types.Permissions.all() },
+      ],
+    });
+
+    console.log("\nTx sent:", signature);
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+    console.log("✅ Multisig created:", multisigPda.toBase58());
+
+    // Vault PDA (SDK helper; pass programId)
     const [vaultPda] = multisig.getVaultPda({
       multisigPda,
-      index: 0, // Default vault index
+      index: 0,
+      programId: PROGRAM_ID,
     });
 
-    console.log("\n💎 Vault Address:", vaultPda.toBase58());
-    console.log("\n📋 Add these to your .env:");
+    console.log("Vault Address:", vaultPda.toBase58());
+    console.log("\nAdd to .env:");
     console.log(`SQUADS_MULTISIG_ADDRESS=${multisigPda.toBase58()}`);
     console.log(`SQUADS_VAULT_ADDRESS=${vaultPda.toBase58()}`);
-
-    console.log("\n💰 Fund the vault with:");
-    console.log(`solana transfer ${vaultPda.toBase58()} 1 --url devnet`);
-
   } catch (error: any) {
-    console.error("\n❌ Error creating multi-sig:", error.message);
+    console.error("\nError creating multi-sig:", error?.message || error);
+    if (error?.logs) {
+      console.error("\nTransaction logs:");
+      for (const log of error.logs) console.error("  ", log);
+    }
     throw error;
   }
 }
 
-// Run the setup
 setupMultisig().catch(console.error);
