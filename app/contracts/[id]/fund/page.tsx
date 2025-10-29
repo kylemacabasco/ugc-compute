@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { depositToTreasury } from "@/lib/solanaDeposit";
+import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Link from "next/link";
 
 interface Contract {
@@ -14,9 +14,6 @@ interface Contract {
   contract_amount: number;
   status: string;
   creator_id: string;
-  creator?: {
-    wallet_address: string;
-  };
 }
 
 export default function FundContractPage() {
@@ -27,34 +24,44 @@ export default function FundContractPage() {
   const { user } = useAuth();
 
   const [contract, setContract] = useState<Contract | null>(null);
-  const [refCode, setRefCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDepositing, setIsDepositing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
-  const [contractStatus, setContractStatus] = useState<string | null>(null);
+  const [customAmount, setCustomAmount] = useState<string>("");
 
   const treasuryAddress = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
 
+  // Fetch contract details on mount
   useEffect(() => {
-    if (params.id && user && !refCode) {
-      fetchContractAndGenerateRef();
+    if (params.id) {
+      fetchContract();
     }
-  }, [params.id, user]);
+  }, [params.id]);
 
-  const fetchContractAndGenerateRef = async () => {
+  // Validate treasury address is properly configured
+  useEffect(() => {
+    if (treasuryAddress) {
+      try {
+        new PublicKey(treasuryAddress);
+      } catch (err) {
+        setError("Invalid treasury address configured. Please contact support.");
+      }
+    } else {
+      setError("Treasury address not configured. Please contact support.");
+    }
+  }, [treasuryAddress]);
+
+  const fetchContract = async () => {
     try {
       setIsLoading(true);
-      setError(null);
-
-      // Fetch contract details
-      const contractResponse = await fetch(`/api/contracts`);
-      if (!contractResponse.ok) {
+      const response = await fetch("/api/contracts");
+      if (!response.ok) {
         throw new Error("Failed to fetch contract");
       }
 
-      const contracts = await contractResponse.json();
+      const contracts = await response.json();
       const currentContract = contracts.find((c: Contract) => c.id === params.id);
 
       if (!currentContract) {
@@ -62,47 +69,12 @@ export default function FundContractPage() {
       }
 
       setContract(currentContract);
+      setCustomAmount(currentContract.contract_amount.toString());
 
-      // Check if user is the creator (compare by wallet address as fallback)
-      if (!user) {
-        setError("Please connect your wallet");
-        return;
-      }
-
-      const isCreator =
-        currentContract.creator_id === user.id ||
-        currentContract.creator?.wallet_address === user.wallet_address;
-
-      if (!isCreator) {
+      // Check if user is the creator
+      if (user && currentContract.creator_id !== user.id) {
         setError("Only the contract creator can fund this contract");
-        return;
       }
-
-      // Generate reference code
-      const refResponse = await fetch("/api/contracts/generate-ref", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contractId: params.id,
-          userId: user.id,
-          expiresInDays: 7,
-        }),
-      });
-
-      const refData = await refResponse.json();
-
-      if (!refResponse.ok) {
-        console.error("Ref generation error:", refData);
-        throw new Error(refData.error || "Failed to generate reference code");
-      }
-
-      if (!refData.ref_code) {
-        console.error("No ref_code in response:", refData);
-        throw new Error("Reference code not returned from server");
-      }
-
-      setRefCode(refData.ref_code);
-      setError(null); // Clear any previous errors on success
     } catch (err) {
       console.error("Error:", err);
       setError(err instanceof Error ? err.message : "Failed to load contract");
@@ -111,79 +83,64 @@ export default function FundContractPage() {
     }
   };
 
-  const handleRecordDeposit = async (sig: string, ref: string, retries = 5) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        console.log(`📝 Recording deposit (attempt ${attempt}/${retries})`);
-        console.log(`   Signature: ${sig}`);
-        console.log(`   RefCode: ${ref}`);
-        
-        const recordResponse = await fetch(`/api/contracts/${params.id}/record-deposit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signature: sig,
-            refCode: ref,
-          }),
-        });
-
-        const recordData = await recordResponse.json();
-        console.log(`   Response (${recordResponse.status}):`, recordData);
-        
-        if (!recordResponse.ok) {
-          // If transaction not found and we have retries left, wait longer and try again
-          if (recordData.error?.includes("not found") && attempt < retries) {
-            const waitTime = 5000; // Wait 5 seconds between retries
-            console.log(`   ⏳ Transaction not confirmed yet, waiting ${waitTime/1000}s before retry...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-            continue;
-          }
-          
-          setError(`Failed to record: ${recordData.error}`);
-          return false;
-        } else {
-          console.log("✅ Deposit recorded successfully!");
-          console.log(`   Contract status: ${recordData.contractStatus || 'pending'}`);
-          setContractStatus(recordData.contractStatus || null);
-          setError(null);
-          
-          // Redirect after a short delay
-          setTimeout(() => {
-            router.push(`/contracts/${params.id}`);
-          }, 2000);
-          return true;
-        }
-      } catch (error) {
-        console.error(`❌ Error recording deposit (attempt ${attempt}/${retries}):`, error);
-        
-        // If we have retries left, wait and try again
-        if (attempt < retries) {
-          console.log(`   ⏳ Waiting 5 seconds before retry...`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          continue;
-        }
-        
-        setError("Failed to record deposit after multiple attempts. The transaction may still be processing.");
-        return false;
-      }
-    }
-    
-    return false;
-  };
-
   const handleDeposit = async () => {
+    // Check wallet connection
     if (!wallet.publicKey || !wallet.signTransaction) {
       setError("Please connect your wallet");
       return;
     }
 
+    // Verify treasury address is configured
     if (!treasuryAddress) {
       setError("Treasury address not configured");
       return;
     }
 
-    if (!refCode || !contract) {
-      setError("Missing reference code or contract details");
+    // Ensure contract data is loaded
+    if (!contract) {
+      setError("Contract details not loaded");
+      return;
+    }
+
+    // Validate deposit amount is a positive number
+    const depositAmount = parseFloat(customAmount);
+    if (isNaN(depositAmount) || depositAmount <= 0) {
+      setError("Please enter a valid deposit amount");
+      return;
+    }
+
+    // Ensure deposit meets minimum contract requirement
+    if (depositAmount < contract.contract_amount) {
+      setError(
+        `Deposit amount (${depositAmount} SOL) is less than required contract amount (${contract.contract_amount} SOL). Please deposit at least ${contract.contract_amount} SOL.`
+      );
+      return;
+    }
+
+    // Validate treasury address is a valid Solana public key
+    let treasuryPubkey: PublicKey;
+    try {
+      treasuryPubkey = new PublicKey(treasuryAddress);
+    } catch (err) {
+      setError("Invalid treasury address. Please contact support.");
+      return;
+    }
+
+    // Check user has sufficient balance for deposit and fees
+    try {
+      const balance = await connection.getBalance(wallet.publicKey);
+      const balanceInSol = balance / LAMPORTS_PER_SOL;
+      const estimatedFee = 0.000005; // ~5000 lamports for transaction fee
+
+      if (balanceInSol < depositAmount + estimatedFee) {
+        setError(
+          `Insufficient balance. You have ${balanceInSol.toFixed(4)} SOL but need ${(depositAmount + estimatedFee).toFixed(4)} SOL (including fees).`
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("Balance check error:", err);
+      setError("Failed to check wallet balance. Please try again.");
       return;
     }
 
@@ -191,36 +148,73 @@ export default function FundContractPage() {
     setError(null);
 
     try {
-      const result = await depositToTreasury({
-        wallet,
-        connection,
-        treasuryAddress,
-        amount: contract.contract_amount,
-        refCode,
-      });
+      // Create simple SOL transfer transaction
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: wallet.publicKey,
+          toPubkey: treasuryPubkey,
+          lamports: Math.floor(depositAmount * LAMPORTS_PER_SOL),
+        })
+      );
 
-      if (result.success) {
-        setSuccess(true);
-        setTxSignature(result.signature);
-        
-        console.log("✅ Transaction confirmed! Waiting 8 seconds before recording deposit...");
-        
-        // Wait longer for the transaction to propagate through the network
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        // Record the deposit directly via API with retries
-        const recorded = await handleRecordDeposit(result.signature, refCode, 5);
-        if (!recorded) {
-          // Show success but with error message
-          console.warn("Deposit transaction was successful but recording failed");
-          setSuccess(true);
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
+
+      // Sign and send transaction
+      const signed = await wallet.signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signed.serialize());
+
+      console.log("Transaction sent:", signature);
+
+      // Wait for confirmation using new API
+      const latestBlockhash = await connection.getLatestBlockhash();
+      await connection.confirmTransaction({
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      }, "confirmed");
+
+      setTxSignature(signature);
+      setSuccess(true);
+
+      // Record the deposit in the database
+      try {
+        const depositResponse = await fetch("/api/deposits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tx_sig: signature,
+            contract_id: params.id,
+            amount_sol: depositAmount,
+            from_address: wallet.publicKey.toBase58(),
+            to_address: treasuryAddress,
+            user_id: user?.id,
+          }),
+        });
+
+        if (!depositResponse.ok) {
+          console.warn("Failed to record deposit:", await depositResponse.text());
         }
-      } else {
-        setError(result.error || "Failed to deposit");
+      } catch (err) {
+        console.warn("Failed to record deposit:", err);
+      }
+
+      // Activate the contract (change status from awaiting_funding to open)
+      try {
+        const activateResponse = await fetch(`/api/contracts/${params.id}/activate`, {
+          method: "POST",
+        });
+
+        if (!activateResponse.ok) {
+          console.warn("Failed to activate contract automatically");
+        }
+      } catch (err) {
+        console.warn("Failed to activate contract:", err);
       }
     } catch (err) {
       console.error("Deposit error:", err);
-      setError(err instanceof Error ? err.message : "Failed to deposit");
+      setError(err instanceof Error ? err.message : "Failed to deposit. Please try again.");
     } finally {
       setIsDepositing(false);
     }
@@ -250,10 +244,7 @@ export default function FundContractPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white rounded-lg shadow p-6">
           <div className="text-red-600 mb-4">{error}</div>
-          <Link
-            href="/"
-            className="text-blue-600 hover:underline"
-          >
+          <Link href="/" className="text-blue-600 hover:underline">
             ← Back to contracts
           </Link>
         </div>
@@ -296,35 +287,25 @@ export default function FundContractPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Deposit Successful!
             </h2>
-            <p className="text-gray-600 mb-4">
-              {contractStatus === "open" 
-                ? "🎉 Your contract is now OPEN and ready for submissions!"
-                : contractStatus === null && !error
-                ? "Processing your deposit... Please wait..."
-                : "Your deposit has been recorded. You will be redirected shortly..."
-              }
+            <p className="text-gray-600 mb-6">
+              Your contract has been funded and is now open for submissions!
             </p>
-            {error && txSignature && refCode && (
-              <div className="mb-4">
-                <p className="text-red-600 text-sm mb-2">{error}</p>
-                <button
-                  onClick={() => handleRecordDeposit(txSignature, refCode)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
-                >
-                  Retry Recording Deposit
-                </button>
-              </div>
-            )}
             {txSignature && (
               <a
-                href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
+                href={`https://explorer.solana.com/tx/${txSignature}?cluster=mainnet`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm"
+                className="text-blue-600 hover:underline text-sm block mb-6"
               >
                 View transaction on Solana Explorer →
               </a>
             )}
+            <Link
+              href={`/contracts/${params.id}`}
+              className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+              Back to Contract
+            </Link>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow p-8">
@@ -341,9 +322,9 @@ export default function FundContractPage() {
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Amount:</span>
+                  <span className="text-gray-600">Required Amount:</span>
                   <span className="font-semibold text-gray-900">
-                    {contract?.contract_amount} SOL
+                    {contract?.contract_amount} SOL (minimum)
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -352,63 +333,43 @@ export default function FundContractPage() {
                     {treasuryAddress?.slice(0, 8)}...{treasuryAddress?.slice(-8)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Reference Code:</span>
-                  <span className="font-mono text-sm text-gray-900">
-                    {refCode}
-                  </span>
-                </div>
               </div>
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-              <div className="flex">
-                <svg
-                  className="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <h4 className="font-semibold text-yellow-900 mb-1">
-                    Important
-                  </h4>
-                  <p className="text-sm text-yellow-800">
-                    The deposit will include a memo with your reference code to
-                    link the funds to this contract. This process is automatic
-                    and secure.
-                  </p>
-                </div>
-              </div>
+            <div className="mb-6">
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
+                Deposit Amount (SOL)
+              </label>
+              <input
+                type="number"
+                id="amount"
+                value={customAmount}
+                onChange={(e) => setCustomAmount(e.target.value)}
+                min={contract?.contract_amount}
+                step="0.01"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder={`Minimum: ${contract?.contract_amount} SOL`}
+                disabled={isDepositing}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                You can deposit more than the required amount
+              </p>
             </div>
 
-            {error && !refCode && (
+            {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
                 {error}
-              </div>
-            )}
-            
-            {error && refCode && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-4">
-                <p className="text-sm">
-                  Note: Reference code was generated successfully. You can proceed with the deposit.
-                </p>
               </div>
             )}
 
             <button
               onClick={handleDeposit}
-              disabled={isDepositing || !wallet.connected}
+              disabled={isDepositing || !wallet.connected || (error !== null && contract !== null)}
               className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {isDepositing
                 ? "Processing..."
-                : `Deposit ${contract?.contract_amount} SOL`}
+                : `Deposit ${customAmount || contract?.contract_amount} SOL`}
             </button>
 
             {!wallet.connected && (
@@ -422,4 +383,3 @@ export default function FundContractPage() {
     </div>
   );
 }
-
