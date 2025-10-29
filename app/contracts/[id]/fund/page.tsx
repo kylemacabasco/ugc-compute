@@ -108,6 +108,24 @@ export default function FundContractPage() {
       setTxSignature(signature);
       setSuccess(true);
 
+      // Record the deposit
+      try {
+        await fetch("/api/deposits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tx_sig: signature,
+            contract_id: params.id,
+            amount_sol: contract.contract_amount,
+            from_address: wallet.publicKey.toBase58(),
+            to_address: treasuryAddress,
+            user_id: user?.id,
+          }),
+        });
+      } catch (err) {
+        console.warn("Failed to record deposit:", err);
+      }
+
       // Update contract status to active
       const activateResponse = await fetch(`/api/contracts/${params.id}/activate`, {
         method: "POST",
