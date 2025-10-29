@@ -29,7 +29,6 @@ export default function FundContractPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
-  const [customAmount, setCustomAmount] = useState<string>("");
 
   const treasuryAddress = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
 
@@ -69,7 +68,6 @@ export default function FundContractPage() {
       }
 
       setContract(currentContract);
-      setCustomAmount(currentContract.contract_amount.toString());
 
       // Check if user is the creator
       if (user && currentContract.creator_id !== user.id) {
@@ -102,20 +100,8 @@ export default function FundContractPage() {
       return;
     }
 
-    // Validate deposit amount is a positive number
-    const depositAmount = parseFloat(customAmount);
-    if (isNaN(depositAmount) || depositAmount <= 0) {
-      setError("Please enter a valid deposit amount");
-      return;
-    }
-
-    // Ensure deposit meets minimum contract requirement
-    if (depositAmount < contract.contract_amount) {
-      setError(
-        `Deposit amount (${depositAmount} SOL) is less than required contract amount (${contract.contract_amount} SOL). Please deposit at least ${contract.contract_amount} SOL.`
-      );
-      return;
-    }
+    // Use the contract amount as the deposit amount
+    const depositAmount = contract.contract_amount;
 
     // Validate treasury address is a valid Solana public key
     let treasuryPubkey: PublicKey;
@@ -324,7 +310,7 @@ export default function FundContractPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Required Amount:</span>
                   <span className="font-semibold text-gray-900">
-                    {contract?.contract_amount} SOL (minimum)
+                    {contract?.contract_amount} SOL
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -334,26 +320,6 @@ export default function FundContractPage() {
                   </span>
                 </div>
               </div>
-            </div>
-
-            <div className="mb-6">
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
-                Deposit Amount (SOL)
-              </label>
-              <input
-                type="number"
-                id="amount"
-                value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
-                min={contract?.contract_amount}
-                step="0.01"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder={`Minimum: ${contract?.contract_amount} SOL`}
-                disabled={isDepositing}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                You can deposit more than the required amount
-              </p>
             </div>
 
             {error && (
@@ -369,7 +335,7 @@ export default function FundContractPage() {
             >
               {isDepositing
                 ? "Processing..."
-                : `Deposit ${customAmount || contract?.contract_amount} SOL`}
+                : `Deposit ${contract?.contract_amount} SOL`}
             </button>
 
             {!wallet.connected && (
