@@ -66,12 +66,12 @@ export async function createContractTreasury(contractId: string, userId: string)
       });
 
     if (refError) {
-      console.warn("Reference code creation failed:", refError.message);
-      // Don't throw error - treasury wallet is more important than reference code
+      // Reference code creation failed - treasury wallet is more important
+      console.error("Reference code creation failed:", refError.message);
     }
   } catch (error) {
-    console.warn("Reference code creation failed:", error);
-    // Don't throw error - treasury wallet is more important than reference code
+    // Reference code creation failed - treasury wallet is more important
+    console.error("Reference code creation failed:", error);
   }
 
   return {
