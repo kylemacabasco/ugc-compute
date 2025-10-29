@@ -53,9 +53,26 @@ export async function createContractTreasury(contractId: string, userId: string)
     throw new Error(`Failed to update contract with treasury wallet: ${contractError.message}`);
   }
 
-  // Create reference code for funding (temporarily disabled due to schema cache issues)
-  // TODO: Re-enable when contract_refs table schema cache is resolved
-  console.log("Reference code generation temporarily disabled:", referenceCode);
+  // Create reference code for funding
+  try {
+    const { error: refError } = await supabase
+      .from("contract_refs")
+      .insert({
+        ref_code: referenceCode,
+        contract_id: contractId,
+        user_id: userId,
+        status: "active",
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      });
+
+    if (refError) {
+      console.warn("Reference code creation failed:", refError.message);
+      // Don't throw error - treasury wallet is more important than reference code
+    }
+  } catch (error) {
+    console.warn("Reference code creation failed:", error);
+    // Don't throw error - treasury wallet is more important than reference code
+  }
 
   return {
     treasuryWallet,
