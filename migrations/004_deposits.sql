@@ -33,7 +33,7 @@ create table if not exists public.deposits (
   from_address text,
 
   tx_sig     text not null,
-  slot       bigint not null,
+  slot       bigint,  -- Nullable: will be set by indexer later
   block_time timestamptz,
 
   mint               text,             -- NULL => SOL
