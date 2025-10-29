@@ -5,6 +5,7 @@ import {
   SystemProgram,
   TransactionInstruction,
   LAMPORTS_PER_SOL,
+  SendTransactionError,
 } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 
@@ -50,6 +51,19 @@ export async function depositToTreasury({
 
     const treasuryPubkey = new PublicKey(treasuryAddress);
 
+    // Check wallet balance
+    const balance = await connection.getBalance(wallet.publicKey);
+    const estimatedFee = 5000; // Estimate 5000 lamports for transaction fee
+    const totalRequired = lamports + estimatedFee;
+
+    if (balance < totalRequired) {
+      const balanceSOL = (balance / LAMPORTS_PER_SOL).toFixed(4);
+      const requiredSOL = (totalRequired / LAMPORTS_PER_SOL).toFixed(4);
+      throw new Error(
+        `Insufficient balance. You have ${balanceSOL} SOL but need ${requiredSOL} SOL (including fees)`
+      );
+    }
+
     // Create the transaction
     const transaction = new Transaction();
 
@@ -77,7 +91,10 @@ export async function depositToTreasury({
 
     // Sign and send transaction
     const signed = await wallet.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
+    const signature = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
 
     // Wait for confirmation
     await connection.confirmTransaction(
@@ -95,6 +112,22 @@ export async function depositToTreasury({
     };
   } catch (error) {
     console.error("Deposit error:", error);
+
+    // Extract detailed logs from SendTransactionError
+    if (error instanceof SendTransactionError) {
+      const logs = await error.getLogs(connection);
+      console.error("Transaction logs:", logs);
+      
+      // Check for specific error patterns
+      if (logs?.some(log => log.includes("insufficient lamports"))) {
+        return {
+          signature: "",
+          success: false,
+          error: "Insufficient funds to complete the transaction",
+        };
+      }
+    }
+
     return {
       signature: "",
       success: false,
