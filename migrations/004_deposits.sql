@@ -18,7 +18,7 @@ end $$;
 
 -- Contract_refs
 create table if not exists public.contract_refs (
-  ref_code   text primary key,
+  contract_slug   text primary key,
   contract_id uuid not null references public.contracts(id) on delete cascade,
   user_id    uuid not null references public.users(id) on delete cascade,
   status     text not null default 'active' check (status in ('active', 'used', 'expired')),
@@ -43,7 +43,7 @@ create index if not exists idx_contract_refs_user     on public.contract_refs(us
 create index if not exists idx_contract_refs_contract on public.contract_refs(contract_id);
 create index if not exists idx_contract_refs_status   on public.contract_refs(status) where status = 'active';
 
--- Prevent duplicate active refs per user+contract combination
+-- Prevent duplicate active slugs per user+contract combination
 create unique index if not exists ux_contract_refs_user_contract_active
   on public.contract_refs(user_id, contract_id)
   where status = 'active';
@@ -110,7 +110,7 @@ create table if not exists public.deposits (
   memo   text,
 
   -- Linking & audit
-  reference_code text,
+  contract_slug text,
   contract_id    uuid references public.contracts(id) on delete set null,
 
   -- Derived for uniqueness (SOL vs SPL)
@@ -132,7 +132,7 @@ create index if not exists idx_deposits_user_id     on public.deposits (user_id)
 create index if not exists idx_deposits_to_address  on public.deposits (to_address);
 create index if not exists idx_deposits_tx_sig      on public.deposits (tx_sig);
 create index if not exists idx_deposits_contract_id on public.deposits (contract_id);
-create index if not exists idx_deposits_reference   on public.deposits (reference_code);
+create index if not exists idx_deposits_contract_slug on public.deposits (contract_slug);
 create index if not exists idx_deposits_addr_slot   on public.deposits (to_address, slot desc);
 
 -- Frontend query optimizations
@@ -202,15 +202,15 @@ begin
        ((old.user_id is null and new.user_id is not null) or (new.user_id = old.user_id))
    and ((old.contract_id is null and new.contract_id is not null) or (new.contract_id = old.contract_id))
    and ((old.memo is null and new.memo is not null) or (new.memo = old.memo))
-   and ((old.reference_code is null and new.reference_code is not null) or (new.reference_code = old.reference_code));
+   and ((old.contract_slug is null and new.contract_slug is not null) or (new.contract_slug = old.contract_slug));
 
   if not allowed_same_row then
     if (row_to_json(new)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'reference_code')
+          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'contract_slug')
        <>
        (row_to_json(old)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'reference_code') then
-      raise exception 'only status plus one-time user_id/contract_id/memo/reference_code is allowed';
+          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'contract_slug') then
+      raise exception 'only status plus one-time user_id/contract_id/memo/contract_slug is allowed';
     end if;
   end if;
 
@@ -267,7 +267,7 @@ select
   d.asset_key,
   d.ui_amount,
   d.status,
-  d.reference_code,
+  d.contract_slug,
   d.created_at
 from public.deposits d
 left join public.contracts c on c.id = d.contract_id

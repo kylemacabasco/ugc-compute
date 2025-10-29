@@ -34,7 +34,7 @@ export async function GET(
     // Get active contract slug
     const { data: slugData, error: slugError } = await supabase
       .from("contract_refs")
-      .select("ref_code, expires_at, status")
+      .select("contract_slug, expires_at, status")
       .eq("contract_id", contractId)
       .eq("status", "active")
       .maybeSingle();
@@ -57,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({
       treasury_wallet_address: contract.treasury_wallet_address,
-      contract_slug: slugData?.ref_code || null,
+      contract_slug: slugData?.contract_slug || null,
       contract_slug_expires_at: slugData?.expires_at || null,
       total_deposited: totalDeposited,
       contract_status: contract.status,

@@ -58,7 +58,7 @@ export async function createContractTreasury(contractId: string, userId: string)
     const { error: slugError } = await supabase
       .from("contract_refs")
       .insert({
-        ref_code: contractSlug,
+        contract_slug: contractSlug,
         contract_id: contractId,
         user_id: userId,
         status: "active",

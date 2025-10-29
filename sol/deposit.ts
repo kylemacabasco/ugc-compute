@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Deposit Indexer: Polls Solana for treasury-address transactions and ingests inbound SOL/SPL deposits into the database.
-// Focus: Reliable extraction, attribution via memo ref codes, idempotent upserts, and heartbeat telemetry.
+// Focus: Reliable extraction, attribution via memo contract slugs, idempotent upserts, and heartbeat telemetry.
 import "dotenv/config";
 import { Connection, PublicKey, type VersionedTransactionResponse } from "@solana/web3.js";
 import { createSupabaseServiceClient } from "../lib/supabase";
@@ -27,7 +27,7 @@ const INITIAL_BACKFILL_CAP = 500;
 // Define SOL decimal places for UI formatting
 const SOL_DECIMALS = 9;
 
-// Define Memo Program ID for extracting reference codes 
+// Define Memo Program ID for extracting contract slugs 
 const MEMO_PID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
 // Set retry behavior for transient RPC/DB errors
@@ -139,8 +139,8 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     else agg.set(key, { mint: x.mint, amount: x.amount, dec: x.dec });
   }
 
-  // Attempt to parse a memo-based reference code from instructions or logs
-  let ref: string | null = null;
+  // Attempt to parse a memo-based contract slug from instructions or logs
+  let contractSlug: string | null = null;
   try {
     const msg: any = tx?.transaction?.message;
     const keys: string[] =
@@ -154,52 +154,52 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
       if (pid === MEMO_PID && ix.data) {
         try {
           const memo = Buffer.from(ix.data, "base64").toString("utf8");
-          const m = /ref:([A-Za-z0-9_-]{3,64})/.exec(memo);
-          if (m) { ref = m[1]; break; }
+          const m = /slug:([a-z0-9]{3,64})/.exec(memo);
+          if (m) { contractSlug = m[1]; break; }
         } catch {}
       }
     }
-    if (!ref) {
+    if (!contractSlug) {
       for (const line of tx?.meta?.logMessages ?? []) {
         const m = line.replace(/^Program log:\s*/i, "");
-        const r = /ref:([A-Za-z0-9_-]{3,64})/.exec(m);
-        if (r) { ref = r[1]; break; }
+        const r = /slug:([a-z0-9]{3,64})/.exec(m);
+        if (r) { contractSlug = r[1]; break; }
       }
     }
   } catch {}
 
-  // Resolve contract and user from the reference code, with expiration handling
+  // Resolve contract and user from the contract slug, with expiration handling
   let resolvedContractId: string | null = null;
   let resolvedUserId: string | null = null;
-  let refWasValid = false;
+  let contractSlugWasValid = false;
 
-  if (ref) {
+  if (contractSlug) {
     const { data: refRow, error: refErr } = await db
       .from("contract_refs")
       .select("contract_id,user_id,expires_at,status")
-      .eq("ref_code", ref)
+      .eq("contract_slug", contractSlug)
       .eq("status", "active")
       .maybeSingle();
 
     if (refErr) throw refErr;
 
     if (refRow) {
-      // Check if the reference code is expired and degrade linking if so
+      // Check if the contract slug is expired and degrade linking if so
       if (refRow.expires_at && new Date(refRow.expires_at) < new Date()) {
-        console.warn(`[deposit] Expired ref: ${ref} for tx ${signature}`);
+        console.warn(`[deposit] Expired contract slug: ${contractSlug} for tx ${signature}`);
         resolvedContractId = null;
         resolvedUserId = refRow.user_id ?? null;
       } else {
         resolvedContractId = refRow.contract_id ?? null;
         resolvedUserId = refRow.user_id ?? null;
-        refWasValid = true;
+        contractSlugWasValid = true;
       }
     } else {
-      console.warn(`[deposit] Ref code not found or already used: ${ref} for tx ${signature}`);
+      console.warn(`[deposit] Contract slug not found or already used: ${contractSlug} for tx ${signature}`);
     }
   }
 
-  // Fallback to resolving user by the inferred sender wallet if ref did not map to a user
+  // Fallback to resolving user by the inferred sender wallet if contract slug did not map to a user
   if (!resolvedUserId) {
     const anyFrom = inbound.find((z) => z.from)?.from ?? null;
     if (anyFrom) {
@@ -234,7 +234,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     const row = {
       user_id: resolvedUserId,
       contract_id: resolvedContractId,
-      reference_code: ref,
+      contract_slug: contractSlug,
       to_address: treasury,
       from_address: fromMatch,
       tx_sig: signature,
@@ -246,7 +246,7 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
       ui_amount: ui,
       status,
       source: "rpc",
-      memo: ref ?? null,
+      memo: contractSlug ?? null,
     };
 
     const { error: upErr } = await db.from("deposits").upsert(row, { onConflict: "tx_sig,to_address,asset_key" });
@@ -257,21 +257,21 @@ async function ingest(signature: string, tx: VersionedTransactionResponse, treas
     );
   }
 
-  // Mark the ref as used after a successful, linked deposit to prevent reuse
-  if (ref && refWasValid && resolvedContractId) {
+  // Mark the contract slug as used after a successful, linked deposit to prevent reuse
+  if (contractSlug && contractSlugWasValid && resolvedContractId) {
     const { error: markErr } = await db
       .from("contract_refs")
       .update({
         status: "used",
         updated_at: new Date().toISOString(),
       })
-      .eq("ref_code", ref)
+      .eq("contract_slug", contractSlug)
       .eq("status", "active"); // Maintain idempotency
 
     if (markErr) {
-      console.error(`[deposit] Failed to mark ref as used: ${ref}`, markErr);
+      console.error(`[deposit] Failed to mark contract slug as used: ${contractSlug}`, markErr);
     } else {
-      console.log(`[deposit] Marked ref as used: ${ref} for contract ${resolvedContractId}`);
+      console.log(`[deposit] Marked contract slug as used: ${contractSlug} for contract ${resolvedContractId}`);
     }
   }
 }
