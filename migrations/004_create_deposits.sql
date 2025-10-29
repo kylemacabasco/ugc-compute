@@ -15,41 +15,6 @@ begin
   raise exception 'delete is forbidden to preserve the ledger';
 end $$;
 
--- contract_refs removed per schema refactor; attribution handled elsewhere
-
-
--- App_settings
-create table if not exists public.app_settings (
-  key text primary key,
-  value text not null,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.app_settings enable row level security;
-
-drop policy if exists "app_settings: read" on public.app_settings;
-create policy "app_settings: read" on public.app_settings
-for select using (true);
-
-
--- Deposit_cursors
-create table if not exists public.deposit_cursors (
-  address text primary key,
-  last_seen_sig text,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.deposit_cursors enable row level security;
-
-drop policy if exists "deposit_cursors: read" on public.deposit_cursors;
-create policy "deposit_cursors: read" on public.deposit_cursors
-for select using (true);
-
-drop trigger if exists trg_deposit_cursors_touch on public.deposit_cursors;
-create trigger trg_deposit_cursors_touch
-before update on public.deposit_cursors
-for each row execute function public.touch_updated_at();
-
 -- Deposits (main ledger table)
 create table if not exists public.deposits (
   id uuid primary key default gen_random_uuid(),
@@ -176,11 +141,9 @@ begin
    and ((old.memo is null and new.memo is not null) or (new.memo = old.memo));
 
   if not allowed_same_row then
-    if (row_to_json(new)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo')
+    if (row_to_json(new) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo')
        <>
-       (row_to_json(old)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo') then
+       (row_to_json(old) - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo') then
       raise exception 'only status plus one-time user_id/contract_id/memo is allowed';
     end if;
   end if;
