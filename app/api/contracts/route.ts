@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { createContractSlug } from "@/lib/treasury";
 
 // GET all contracts
 export async function GET() {
@@ -144,32 +143,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate contract slug for funding attribution
-    try {
-      const { contractSlug } = await createContractSlug(
-        data.id,
-        user.id
-      );
-
-      // Return contract with slug
-      return NextResponse.json(
-        {
-          ...data,
-          contract_slug: contractSlug,
-        },
-        { status: 201 }
-      );
-    } catch (slugError) {
-      console.error("Error creating contract slug:", slugError);
-      // Contract was created but slug failed - return contract anyway
-      return NextResponse.json(
-        {
-          ...data,
-          warning: "Contract created but slug generation failed",
-        },
-        { status: 201 }
-      );
-    }
+    // Return created contract (slug attribution removed per schema refactor)
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error in POST /api/contracts:", error);
     return NextResponse.json(

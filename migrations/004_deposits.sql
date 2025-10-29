@@ -15,37 +15,7 @@ begin
   raise exception 'delete is forbidden to preserve the ledger';
 end $$;
 
--- Contract_refs
-create table if not exists public.contract_refs (
-  contract_slug   text primary key,
-  contract_id uuid not null references public.contracts(id) on delete cascade,
-  user_id    uuid not null references public.users(id) on delete cascade,
-  status     text not null default 'active' check (status in ('active', 'used', 'expired')),
-  expires_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-alter table public.contract_refs enable row level security;
-
-drop policy if exists "contract_refs: read" on public.contract_refs;
-create policy "contract_refs: read" on public.contract_refs
-for select using (true);
-
-drop trigger if exists trg_contract_refs_touch on public.contract_refs;
-create trigger trg_contract_refs_touch
-before update on public.contract_refs
-for each row execute function public.touch_updated_at();
-
--- Indexes for contract_refs
-create index if not exists idx_contract_refs_user     on public.contract_refs(user_id);
-create index if not exists idx_contract_refs_contract on public.contract_refs(contract_id);
-create index if not exists idx_contract_refs_status   on public.contract_refs(status) where status = 'active';
-
--- Prevent duplicate active slugs per user+contract combination
-create unique index if not exists ux_contract_refs_user_contract_active
-  on public.contract_refs(user_id, contract_id)
-  where status = 'active';
+-- contract_refs removed per schema refactor; attribution handled elsewhere
 
 
 -- App_settings
@@ -107,8 +77,7 @@ create table if not exists public.deposits (
   source text not null default 'rpc' check (source in ('rpc','webhook','backfill')),
   memo   text,
 
-  -- Contract linking & audit
-  contract_slug text,
+  -- Contract linking
   contract_id uuid references public.contracts(id) on delete set null,
 
   -- Derived for uniqueness (SOL vs SPL)
@@ -134,7 +103,6 @@ create index if not exists idx_deposits_user_id     on public.deposits (user_id)
 create index if not exists idx_deposits_to_address  on public.deposits (to_address);
 create index if not exists idx_deposits_tx_sig      on public.deposits (tx_sig);
 create index if not exists idx_deposits_contract_id on public.deposits (contract_id);
-create index if not exists idx_deposits_contract_slug on public.deposits (contract_slug);
 create index if not exists idx_deposits_addr_slot   on public.deposits (to_address, slot desc);
 
 -- Frontend query optimizations
@@ -205,16 +173,15 @@ begin
   allowed_same_row :=
        ((old.user_id is null and new.user_id is not null) or (new.user_id = old.user_id))
    and ((old.contract_id is null and new.contract_id is not null) or (new.contract_id = old.contract_id))
-   and ((old.memo is null and new.memo is not null) or (new.memo = old.memo))
-   and ((old.contract_slug is null and new.contract_slug is not null) or (new.contract_slug = old.contract_slug));
+   and ((old.memo is null and new.memo is not null) or (new.memo = old.memo));
 
   if not allowed_same_row then
     if (row_to_json(new)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'contract_slug')
+          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo')
        <>
        (row_to_json(old)
-          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo' - 'contract_slug') then
-      raise exception 'only status plus one-time user_id/contract_id/memo/contract_slug is allowed';
+          - 'status' - 'updated_at' - 'user_id' - 'contract_id' - 'memo') then
+      raise exception 'only status plus one-time user_id/contract_id/memo is allowed';
     end if;
   end if;
 
@@ -259,7 +226,6 @@ select
   d.asset_key,
   d.ui_amount,
   d.status,
-  d.contract_slug,
   d.created_at
 from public.deposits d
 left join public.contracts c on c.id = d.contract_id
