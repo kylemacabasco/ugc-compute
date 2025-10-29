@@ -191,10 +191,45 @@ export async function POST(
       .eq("ref_code", refCode)
       .eq("status", "active");
 
+    // Check if contract is now fully funded
+    const { data: deposits } = await supabase
+      .from("deposits")
+      .select("ui_amount, mint")
+      .eq("contract_id", contractId)
+      .in("status", ["confirmed", "finalized"]);
+
+    const totalDeposited = deposits?.reduce((sum, dep) => {
+      if (!dep.mint) return sum + parseFloat(dep.ui_amount);
+      return sum;
+    }, 0) || 0;
+
+    console.log(`[record-deposit] Total deposited: ${totalDeposited} SOL, required: ${contract.contract_amount} SOL`);
+    
+    if (totalDeposited >= contract.contract_amount) {
+      await supabase
+        .from("contracts")
+        .update({ status: "open" })
+        .eq("id", contractId);
+
+      console.log(`[record-deposit] ✅ Contract ${contractId} status updated to OPEN`);
+
+      return NextResponse.json({
+        success: true,
+        message: "Deposit recorded and contract is now open",
+        amountReceived,
+        totalDeposited,
+        contractStatus: "open",
+      });
+    }
+
+    console.log(`[record-deposit] Contract not yet fully funded`);
+
     return NextResponse.json({
       success: true,
       message: "Deposit recorded",
       amountReceived,
+      totalDeposited,
+      required: contract.contract_amount,
     });
   } catch (error) {
     console.error("[record-deposit] Error:", error);

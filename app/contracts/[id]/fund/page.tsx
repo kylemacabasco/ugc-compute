@@ -33,6 +33,7 @@ export default function FundContractPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [contractStatus, setContractStatus] = useState<string | null>(null);
 
   const treasuryAddress = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
 
@@ -142,6 +143,8 @@ export default function FundContractPage() {
           return false;
         } else {
           console.log("✅ Deposit recorded successfully!");
+          console.log(`   Contract status: ${recordData.contractStatus || 'pending'}`);
+          setContractStatus(recordData.contractStatus || null);
           setError(null);
           
           // Redirect after a short delay
@@ -294,7 +297,12 @@ export default function FundContractPage() {
               Deposit Successful!
             </h2>
             <p className="text-gray-600 mb-4">
-              Your deposit has been recorded successfully! You will be redirected shortly...
+              {contractStatus === "open" 
+                ? "🎉 Your contract is now OPEN and ready for submissions!"
+                : contractStatus === null && !error
+                ? "Processing your deposit... Please wait..."
+                : "Your deposit has been recorded. You will be redirected shortly..."
+              }
             </p>
             {error && txSignature && refCode && (
               <div className="mb-4">
