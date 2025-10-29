@@ -49,6 +49,7 @@ export default function CreateContractPage() {
       }
 
       const contract = await response.json();
+      // Redirect to funding page to deposit SOL
       router.push(`/contracts/${contract.id}/fund`);
     } catch (err) {
       setError(
