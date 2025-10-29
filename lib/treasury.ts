@@ -14,7 +14,7 @@ export function generateContractSlug(): string {
 
 /**
  * Creates a contract slug for a contract
- * Contract attribution is done via slugs/memos to a single squads vault (multisig)
+ * Contract attribution is done via slugs/memos for deposit tracking
  */
 export async function createContractSlug(contractId: string, userId: string): Promise<{
   contractSlug: string;
