@@ -55,7 +55,9 @@ export default function FundContractPage() {
   const fetchContract = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/contracts");
+      const response = await fetch("/api/contracts", {
+        cache: 'no-store' // Prevent caching to always get fresh data
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch contract");
       }
@@ -162,7 +164,6 @@ export default function FundContractPage() {
       }, "confirmed");
 
       setTxSignature(signature);
-      setSuccess(true);
 
       // Record the deposit in the database
       try {
@@ -193,11 +194,22 @@ export default function FundContractPage() {
         });
 
         if (!activateResponse.ok) {
-          console.warn("Failed to activate contract automatically");
+          const errorText = await activateResponse.text();
+          console.error("Failed to activate contract:", errorText);
+          setError("Deposit successful, but failed to activate contract. Please contact support.");
+          return;
         }
+
+        const activateData = await activateResponse.json();
+        console.log("Contract activated:", activateData);
       } catch (err) {
-        console.warn("Failed to activate contract:", err);
+        console.error("Failed to activate contract:", err);
+        setError("Deposit successful, but failed to activate contract. Please contact support.");
+        return;
       }
+
+      // Only show success if everything worked
+      setSuccess(true);
     } catch (err) {
       console.error("Deposit error:", err);
       setError(err instanceof Error ? err.message : "Failed to deposit. Please try again.");

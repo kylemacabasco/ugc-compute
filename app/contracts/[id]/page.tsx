@@ -49,7 +49,9 @@ export default function ContractDetailPage() {
 
   const fetchContract = async () => {
     try {
-      const response = await fetch("/api/contracts");
+      const response = await fetch("/api/contracts", {
+        cache: 'no-store' // Prevent caching to always get fresh data
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch contracts");
       }
