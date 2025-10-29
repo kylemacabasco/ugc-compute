@@ -18,7 +18,7 @@ interface FundContractProps {
 
 interface TreasuryInfo {
   treasury_wallet_address: string;
-  reference_code: string | null;
+  contract_slug: string | null;
   total_deposited: number;
   contract_status: string;
 }
@@ -50,7 +50,7 @@ export default function FundContract({
         // Treasury not configured - show message
         setTreasuryInfo({
           treasury_wallet_address: "",
-          reference_code: null,
+          contract_slug: null,
           total_deposited: 0,
           contract_status: "awaiting_funding",
         });
@@ -98,8 +98,8 @@ export default function FundContract({
         })
       );
 
-      // Add memo with reference code if available
-      if (treasuryInfo.reference_code) {
+      // Add memo with contract slug if available
+      if (treasuryInfo.contract_slug) {
         const MEMO_PROGRAM_ID = new PublicKey(
           "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
         );
@@ -107,7 +107,7 @@ export default function FundContract({
         const memoInstruction = new TransactionInstruction({
           keys: [],
           programId: MEMO_PROGRAM_ID,
-          data: Buffer.from(`ref:${treasuryInfo.reference_code}`, "utf-8"),
+          data: Buffer.from(`slug:${treasuryInfo.contract_slug}`, "utf-8"),
         });
 
         transaction.add(memoInstruction);
@@ -253,13 +253,13 @@ export default function FundContract({
             <p className="text-xs font-mono text-gray-900 dark:text-slate-100 break-all">
               {treasuryInfo.treasury_wallet_address}
             </p>
-            {treasuryInfo.reference_code && (
+            {treasuryInfo.contract_slug && (
               <>
                 <p className="text-xs text-gray-600 dark:text-slate-400 mt-2 mb-1">
-                  Reference Code:
+                  Contract Slug:
                 </p>
                 <p className="text-xs font-mono text-gray-900 dark:text-slate-100">
-                  {treasuryInfo.reference_code}
+                  {treasuryInfo.contract_slug}
                 </p>
               </>
             )}

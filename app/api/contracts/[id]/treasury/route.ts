@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// GET treasury wallet and reference code for a contract
+// GET treasury wallet and contract slug for a contract
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,16 +31,16 @@ export async function GET(
       );
     }
 
-    // Get active reference code
-    const { data: refData, error: refError } = await supabase
+    // Get active contract slug
+    const { data: slugData, error: slugError } = await supabase
       .from("contract_refs")
       .select("ref_code, expires_at, status")
       .eq("contract_id", contractId)
       .eq("status", "active")
       .maybeSingle();
 
-    if (refError) {
-      console.error("Error fetching reference code:", refError);
+    if (slugError) {
+      console.error("Error fetching contract slug:", slugError);
     }
 
     // Get total deposits for this contract
@@ -57,8 +57,8 @@ export async function GET(
 
     return NextResponse.json({
       treasury_wallet_address: contract.treasury_wallet_address,
-      reference_code: refData?.ref_code || null,
-      reference_expires_at: refData?.expires_at || null,
+      contract_slug: slugData?.ref_code || null,
+      contract_slug_expires_at: slugData?.expires_at || null,
       total_deposited: totalDeposited,
       contract_status: contract.status,
     });

@@ -10,7 +10,7 @@ CREATE INDEX IF NOT EXISTS idx_contracts_treasury_wallet ON contracts(treasury_w
 COMMENT ON COLUMN contracts.treasury_wallet_address IS 'Unique Solana wallet address for this contract to receive funding deposits';
 COMMENT ON COLUMN contracts.treasury_keypair_encrypted IS 'Encrypted private key for the treasury wallet';
 
--- Create contract_refs table for reference codes
+-- Create contract_refs table for contract slugs
 CREATE TABLE IF NOT EXISTS contract_refs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   ref_code TEXT NOT NULL UNIQUE,
@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS contract_refs (
 CREATE INDEX IF NOT EXISTS idx_contract_refs_contract_id ON contract_refs(contract_id);
 CREATE INDEX IF NOT EXISTS idx_contract_refs_ref_code ON contract_refs(ref_code);
 CREATE INDEX IF NOT EXISTS idx_contract_refs_status ON contract_refs(status);
+
+-- Add comment explaining the contract slug system
+COMMENT ON COLUMN contract_refs.ref_code IS 'Contract slug for easy identification and funding attribution';
 
 -- Add RLS policies for contract_refs
 ALTER TABLE contract_refs ENABLE ROW LEVEL SECURITY;

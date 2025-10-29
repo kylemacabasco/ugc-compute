@@ -19,26 +19,26 @@ export function generateTreasuryWallet(): TreasuryWallet {
 }
 
 /**
- * Generates a unique reference code for contract funding
+ * Generates a unique contract slug for contract funding
  */
-export function generateReferenceCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+export function generateContractSlug(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 8; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
 }
 
 /**
- * Creates a treasury wallet and reference code for a contract
+ * Creates a treasury wallet and contract slug for a contract
  */
 export async function createContractTreasury(contractId: string, userId: string): Promise<{
   treasuryWallet: TreasuryWallet;
-  referenceCode: string;
+  contractSlug: string;
 }> {
   const treasuryWallet = generateTreasuryWallet();
-  const referenceCode = generateReferenceCode();
+  const contractSlug = generateContractSlug();
 
   // Update contract with treasury wallet
   const { error: contractError } = await supabase
@@ -53,30 +53,30 @@ export async function createContractTreasury(contractId: string, userId: string)
     throw new Error(`Failed to update contract with treasury wallet: ${contractError.message}`);
   }
 
-  // Create reference code for funding
+  // Create contract slug for funding
   try {
-    const { error: refError } = await supabase
+    const { error: slugError } = await supabase
       .from("contract_refs")
       .insert({
-        ref_code: referenceCode,
+        ref_code: contractSlug,
         contract_id: contractId,
         user_id: userId,
         status: "active",
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
       });
 
-    if (refError) {
-      // Reference code creation failed - treasury wallet is more important
-      console.error("Reference code creation failed:", refError.message);
+    if (slugError) {
+      // Contract slug creation failed - treasury wallet is more important
+      console.error("Contract slug creation failed:", slugError.message);
     }
   } catch (error) {
-    // Reference code creation failed - treasury wallet is more important
-    console.error("Reference code creation failed:", error);
+    // Contract slug creation failed - treasury wallet is more important
+    console.error("Contract slug creation failed:", error);
   }
 
   return {
     treasuryWallet,
-    referenceCode,
+    contractSlug,
   };
 }
 

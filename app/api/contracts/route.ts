@@ -144,9 +144,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate treasury wallet and reference code (if columns exist)
+    // Generate treasury wallet and contract slug (if columns exist)
     try {
-      const { treasuryWallet, referenceCode } = await createContractTreasury(
+      const { treasuryWallet, contractSlug } = await createContractTreasury(
         data.id,
         user.id
       );
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         {
           ...data,
           treasury_wallet_address: treasuryWallet.address,
-          reference_code: referenceCode,
+          contract_slug: contractSlug,
         },
         { status: 201 }
       );
