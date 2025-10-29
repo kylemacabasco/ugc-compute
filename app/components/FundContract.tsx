@@ -17,7 +17,7 @@ interface FundContractProps {
 }
 
 interface TreasuryInfo {
-  treasury_wallet_address: string;
+  vault_address: string;
   contract_slug: string | null;
   total_deposited: number;
   contract_status: string;
@@ -49,12 +49,12 @@ export default function FundContract({
       } else if (response.status === 400) {
         // Treasury not configured - show message
         setTreasuryInfo({
-          treasury_wallet_address: "",
+          vault_address: "",
           contract_slug: null,
           total_deposited: 0,
           contract_status: "awaiting_funding",
         });
-        setError("Treasury wallet not configured. Please apply migration 005 in Supabase.");
+        setError("Squads vault not configured. Please set SQUADS_VAULT_ADDRESS environment variable.");
       }
     } catch (err) {
       console.error("Failed to fetch treasury info:", err);
@@ -84,8 +84,8 @@ export default function FundContract({
           "https://api.devnet.solana.com"
       );
 
-      const treasuryPubkey = new PublicKey(
-        treasuryInfo.treasury_wallet_address
+      const vaultPubkey = new PublicKey(
+        treasuryInfo.vault_address
       );
       const lamports = Math.floor(amount * LAMPORTS_PER_SOL);
 
@@ -93,7 +93,7 @@ export default function FundContract({
       const transaction = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: publicKey,
-          toPubkey: treasuryPubkey,
+          toPubkey: vaultPubkey,
           lamports,
         })
       );
@@ -245,13 +245,13 @@ export default function FundContract({
             </button>
           </div>
 
-          {/* Treasury Wallet Info */}
+          {/* Squads Vault Info */}
           <div className="mt-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
             <p className="text-xs text-gray-600 dark:text-slate-400 mb-1">
-              Treasury Wallet:
+              Squads Vault Address:
             </p>
             <p className="text-xs font-mono text-gray-900 dark:text-slate-100 break-all">
-              {treasuryInfo.treasury_wallet_address}
+              {treasuryInfo.vault_address}
             </p>
             {treasuryInfo.contract_slug && (
               <>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { createContractTreasury } from "@/lib/treasury";
+import { createContractSlug } from "@/lib/treasury";
 
 // GET all contracts
 export async function GET() {
@@ -144,29 +144,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate treasury wallet and contract slug (if columns exist)
+    // Generate contract slug for funding attribution
     try {
-      const { treasuryWallet, contractSlug } = await createContractTreasury(
+      const { contractSlug } = await createContractSlug(
         data.id,
         user.id
       );
 
-      // Return contract with treasury info
+      // Return contract with slug
       return NextResponse.json(
         {
           ...data,
-          treasury_wallet_address: treasuryWallet.address,
           contract_slug: contractSlug,
         },
         { status: 201 }
       );
-    } catch (treasuryError) {
-      console.error("Error creating treasury:", treasuryError);
-      // Contract was created but treasury failed - return contract anyway
+    } catch (slugError) {
+      console.error("Error creating contract slug:", slugError);
+      // Contract was created but slug failed - return contract anyway
       return NextResponse.json(
         {
           ...data,
-          warning: "Contract created but treasury setup failed - please apply migration 005",
+          warning: "Contract created but slug generation failed",
         },
         { status: 201 }
       );

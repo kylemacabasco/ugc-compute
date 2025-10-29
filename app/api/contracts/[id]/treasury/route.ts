@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// GET treasury wallet and contract slug for a contract
+// GET squads vault address and contract slug for a contract
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -10,10 +10,10 @@ export async function GET(
     const { id } = await params;
     const contractId = id;
 
-    // Get contract treasury info
+    // Get contract info
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
-      .select("id, treasury_wallet_address, status")
+      .select("id, status")
       .eq("id", contractId)
       .single();
 
@@ -24,10 +24,12 @@ export async function GET(
       );
     }
 
-    if (!contract.treasury_wallet_address) {
+    // Get squads vault address from environment (single multisig vault for all contracts)
+    const squadsVaultAddress = process.env.SQUADS_VAULT_ADDRESS;
+    if (!squadsVaultAddress) {
       return NextResponse.json(
-        { error: "Treasury wallet not configured for this contract" },
-        { status: 400 }
+        { error: "Squads vault address not configured" },
+        { status: 500 }
       );
     }
 
@@ -56,7 +58,7 @@ export async function GET(
     ) || 0;
 
     return NextResponse.json({
-      treasury_wallet_address: contract.treasury_wallet_address,
+      vault_address: squadsVaultAddress,
       contract_slug: slugData?.contract_slug || null,
       contract_slug_expires_at: slugData?.expires_at || null,
       total_deposited: totalDeposited,

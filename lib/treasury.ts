@@ -1,25 +1,7 @@
-import { Keypair } from "@solana/web3.js";
 import { supabase } from "@/lib/supabase";
 
-export interface TreasuryWallet {
-  address: string;
-  privateKey: string;
-}
-
 /**
- * Generates a new Solana keypair for treasury wallet
- */
-export function generateTreasuryWallet(): TreasuryWallet {
-  const keypair = Keypair.generate();
-  
-  return {
-    address: keypair.publicKey.toBase58(),
-    privateKey: Buffer.from(keypair.secretKey).toString('base64')
-  };
-}
-
-/**
- * Generates a unique contract slug for contract funding
+ * Generates a unique contract slug for contract funding attribution
  */
 export function generateContractSlug(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -31,29 +13,15 @@ export function generateContractSlug(): string {
 }
 
 /**
- * Creates a treasury wallet and contract slug for a contract
+ * Creates a contract slug for a contract
+ * Contract attribution is done via slugs/memos to a single squads vault (multisig)
  */
-export async function createContractTreasury(contractId: string, userId: string): Promise<{
-  treasuryWallet: TreasuryWallet;
+export async function createContractSlug(contractId: string, userId: string): Promise<{
   contractSlug: string;
 }> {
-  const treasuryWallet = generateTreasuryWallet();
   const contractSlug = generateContractSlug();
 
-  // Update contract with treasury wallet
-  const { error: contractError } = await supabase
-    .from("contracts")
-    .update({
-      treasury_wallet_address: treasuryWallet.address,
-      treasury_keypair_encrypted: treasuryWallet.privateKey,
-    })
-    .eq("id", contractId);
-
-  if (contractError) {
-    throw new Error(`Failed to update contract with treasury wallet: ${contractError.message}`);
-  }
-
-  // Create contract slug for funding
+  // Create contract slug for funding attribution
   try {
     const { error: slugError } = await supabase
       .from("contract_refs")
@@ -66,16 +34,14 @@ export async function createContractTreasury(contractId: string, userId: string)
       });
 
     if (slugError) {
-      // Contract slug creation failed - treasury wallet is more important
-      console.error("Contract slug creation failed:", slugError.message);
+      throw new Error(`Failed to create contract slug: ${slugError.message}`);
     }
   } catch (error) {
-    // Contract slug creation failed - treasury wallet is more important
     console.error("Contract slug creation failed:", error);
+    throw error;
   }
 
   return {
-    treasuryWallet,
     contractSlug,
   };
 }

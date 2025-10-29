@@ -1,14 +1,5 @@
--- Add treasury wallet fields to contracts table
-ALTER TABLE contracts 
-ADD COLUMN IF NOT EXISTS treasury_wallet_address TEXT,
-ADD COLUMN IF NOT EXISTS treasury_keypair_encrypted TEXT;
-
--- Add index for treasury wallet lookups
-CREATE INDEX IF NOT EXISTS idx_contracts_treasury_wallet ON contracts(treasury_wallet_address);
-
--- Add comment explaining the treasury wallet system
-COMMENT ON COLUMN contracts.treasury_wallet_address IS 'Unique Solana wallet address for this contract to receive funding deposits';
-COMMENT ON COLUMN contracts.treasury_keypair_encrypted IS 'Encrypted private key for the treasury wallet';
+-- Note: We use a single squads vault (multisig) for all deposits
+-- Contract attribution is done via slugs/memos, not per-contract wallets
 
 -- Create contract_refs table for contract slugs
 CREATE TABLE IF NOT EXISTS contract_refs (
