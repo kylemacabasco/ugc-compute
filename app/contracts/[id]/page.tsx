@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/providers/AuthProvider";
 import SubmissionForm from "@/app/components/SubmissionForm";
 import SubmissionsList from "@/app/components/SubmissionsList";
+import FundContract from "@/app/components/FundContract";
 
 interface Contract {
   id: string;
@@ -223,6 +224,11 @@ export default function ContractDetailPage() {
               {contract.calculated_earned.toFixed(2)} of {contract.contract_amount} SOL allocated
             </p>
           </div>
+
+          {/* Fund Contract Section */}
+          {user && contract.creator?.wallet_address === user.wallet_address && contract.status === "awaiting_funding" && (
+            <FundContract contractId={contract.id} contractAmount={contract.contract_amount} />
+          )}
 
           {/* Update Views Button */}
           {!contract.is_completed && (

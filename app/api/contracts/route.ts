@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { createContractTreasury } from "@/lib/treasury";
 
 // GET all contracts
 export async function GET() {
@@ -143,7 +144,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data, { status: 201 });
+    // Generate treasury wallet and reference code (if columns exist)
+    try {
+      const { treasuryWallet, referenceCode } = await createContractTreasury(
+        data.id,
+        user.id
+      );
+
+      // Return contract with treasury info
+      return NextResponse.json(
+        {
+          ...data,
+          treasury_wallet_address: treasuryWallet.address,
+          reference_code: referenceCode,
+        },
+        { status: 201 }
+      );
+    } catch (treasuryError) {
+      console.error("Error creating treasury:", treasuryError);
+      // Contract was created but treasury failed - return contract anyway
+      return NextResponse.json(
+        {
+          ...data,
+          warning: "Contract created but treasury setup failed - please apply migration 005",
+        },
+        { status: 201 }
+      );
+    }
   } catch (error) {
     console.error("Error in POST /api/contracts:", error);
     return NextResponse.json(

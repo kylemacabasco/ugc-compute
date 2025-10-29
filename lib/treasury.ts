@@ -1,0 +1,65 @@
+import { Keypair } from "@solana/web3.js";
+import { supabase } from "@/lib/supabase";
+
+export interface TreasuryWallet {
+  address: string;
+  privateKey: string;
+}
+
+/**
+ * Generates a new Solana keypair for treasury wallet
+ */
+export function generateTreasuryWallet(): TreasuryWallet {
+  const keypair = Keypair.generate();
+  
+  return {
+    address: keypair.publicKey.toBase58(),
+    privateKey: Buffer.from(keypair.secretKey).toString('base64')
+  };
+}
+
+/**
+ * Generates a unique reference code for contract funding
+ */
+export function generateReferenceCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 12; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Creates a treasury wallet and reference code for a contract
+ */
+export async function createContractTreasury(contractId: string, userId: string): Promise<{
+  treasuryWallet: TreasuryWallet;
+  referenceCode: string;
+}> {
+  const treasuryWallet = generateTreasuryWallet();
+  const referenceCode = generateReferenceCode();
+
+  // Update contract with treasury wallet
+  const { error: contractError } = await supabase
+    .from("contracts")
+    .update({
+      treasury_wallet_address: treasuryWallet.address,
+      treasury_keypair_encrypted: treasuryWallet.privateKey,
+    })
+    .eq("id", contractId);
+
+  if (contractError) {
+    throw new Error(`Failed to update contract with treasury wallet: ${contractError.message}`);
+  }
+
+  // Create reference code for funding (temporarily disabled due to schema cache issues)
+  // TODO: Re-enable when contract_refs table schema cache is resolved
+  console.log("Reference code generation temporarily disabled:", referenceCode);
+
+  return {
+    treasuryWallet,
+    referenceCode,
+  };
+}
+
