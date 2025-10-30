@@ -137,20 +137,24 @@ export default function ContractDetailPage() {
     setPayoutMessage(null);
 
     try {
-      const response = await fetch(
-        `/api/contracts/${contract.id}/payouts/distribute`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requester_wallet: user.wallet_address }),
-        }
-      );
+      const response = await fetch(`/api/payouts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          contract_id: contract.id,
+          requester_wallet: user.wallet_address 
+        }),
+      });
 
       const data = await response.json();
 
       if (response.ok) {
-        const count = Array.isArray(data.payouts) ? data.payouts.length : 0;
-        setPayoutMessage(`Created ${count} payout${count === 1 ? "" : "s"}.`);
+        const summary = data.summary || { succeeded: 0 };
+        setPayoutMessage(
+          `Successfully paid ${summary.succeeded} user${summary.succeeded === 1 ? "" : "s"}. ${
+            summary.failed > 0 ? `${summary.failed} failed.` : ""
+          }`
+        );
       } else {
         setPayoutMessage(data.error || "Failed to distribute payouts");
       }

@@ -1,13 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServiceClient } from "@/lib/supabase";
 
+// GET payout summary for a contract (creator-only)
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = createSupabaseServiceClient();
     const { id } = await params;
     const contractId = id;
+
+    // Creator authentication
+    const url = new URL(request.url);
+    const requester_wallet = url.searchParams.get("requester_wallet");
+    
+    if (requester_wallet) {
+      const { data: contract } = await supabase
+        .from("contracts")
+        .select("creator_id")
+        .eq("id", contractId)
+        .maybeSingle();
+
+      if (contract) {
+        const { data: creator } = await supabase
+          .from("users")
+          .select("wallet_address")
+          .eq("id", contract.creator_id)
+          .maybeSingle();
+
+        if (!creator || creator.wallet_address !== requester_wallet) {
+          return NextResponse.json(
+            { error: "Only contract creator can view payout summary" },
+            { status: 403 }
+          );
+        }
+      }
+    }
 
     const { data, error } = await supabase
       .from("payouts")

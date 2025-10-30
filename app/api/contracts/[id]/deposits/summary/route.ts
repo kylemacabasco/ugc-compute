@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServiceClient } from "@/lib/supabase";
 
+// GET total deposited SOL for a contract (finalized deposits only)
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = createSupabaseServiceClient();
     const { id } = await params;
     const contractId = id;
 

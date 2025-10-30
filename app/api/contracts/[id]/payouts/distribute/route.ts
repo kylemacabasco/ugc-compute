@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServiceClient } from "@/lib/supabase";
 
 // POST distribute payouts for a contract (creator-only)
+// Creates pending payout records based on earnings or approved submissions
+// 
+// This endpoint ONLY creates payout records in the database with status="pending"
+// It does NOT perform on-chain Solana transfers
+// 
+// A separate processor endpoint (/api/payouts/process) will handle:
+// - Multisig Squads vault transactions
+// - Updating payout status to "completed" with transaction signatures
+// - Handling on-chain execution and confirmation
+//
+// Idempotency: DB constraint prevents duplicate distributions (migration 005)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = createSupabaseServiceClient();
     const { id } = await params;
     const contractId = id;
 
@@ -15,7 +27,7 @@ export async function POST(
       .from("contracts")
       .select("id, creator_id, rate_per_1k_views")
       .eq("id", contractId)
-      .single();
+      .maybeSingle();
 
     if (contractError || !contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
@@ -31,7 +43,7 @@ export async function POST(
       .from("users")
       .select("wallet_address")
       .eq("id", contract.creator_id)
-      .single();
+      .maybeSingle();
     if (!creator || creator.wallet_address !== requester_wallet) {
       return NextResponse.json(
         { error: "Only contract creator can distribute payouts" },
@@ -96,21 +108,7 @@ export async function POST(
       }
     }
 
-    // Idempotency: if payouts already exist for this contract in pending or completed, avoid double creation
-    const { data: existingPayouts } = await supabase
-      .from("payouts")
-      .select("id")
-      .eq("contract_id", contractId)
-      .in("status", ["pending", "completed"])
-      .limit(1);
-
-    if (existingPayouts && existingPayouts.length > 0) {
-      return NextResponse.json(
-        { error: "Payouts already created for this contract" },
-        { status: 409 }
-      );
-    }
-
+    // Build payout payload
     const payload = Array.from(userTotals.entries())
       .map(([userId, amount]) => ({
         userId,
@@ -128,16 +126,47 @@ export async function POST(
       return NextResponse.json({ success: true, payouts: [], message: "No earnings to distribute (0 totals after filtering)" });
     }
 
+    // Insert payouts - DB unique constraint (migration 005) prevents duplicates
+    // If constraint violation occurs, it means payouts were already created (race condition or retry)
     const { data: inserted, error: insertError } = await supabase
       .from("payouts")
       .insert(payload)
       .select("id, user_id, amount, status");
 
     if (insertError) {
+      // Unique constraint violation (23505) = payouts already exist for this contract
+      if (insertError.code === "23505" || insertError.message?.includes("ux_payouts_contract_pending")) {
+        // Fetch existing payouts to return helpful info
+        const { data: existing } = await supabase
+          .from("payouts")
+          .select("id, status, created_at")
+          .eq("contract_id", contractId)
+          .in("status", ["pending", "processing", "completed", "paid"])
+          .limit(1);
+        
+        return NextResponse.json(
+          { 
+            error: "Payouts already created for this contract", 
+            existing: existing?.[0],
+            detail: "Database constraint prevents duplicate distributions"
+          },
+          { status: 409 }
+        );
+      }
+      console.error("Payout insert error:", insertError);
       return NextResponse.json(
-        { error: "Failed to create payouts" },
+        { error: "Failed to create payouts", detail: insertError.message },
         { status: 500 }
       );
+    }
+
+    // Mark earnings as committed to prevent double-counting
+    if (pendingEarnings && pendingEarnings.length > 0) {
+      await supabase
+        .from("earnings")
+        .update({ payout_status: "committed" })
+        .eq("contract_id", contractId)
+        .eq("payout_status", "pending");
     }
 
     return NextResponse.json({ success: true, payouts: inserted });
