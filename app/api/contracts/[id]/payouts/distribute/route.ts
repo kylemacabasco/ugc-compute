@@ -21,24 +21,39 @@ export async function POST(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    // Optional creator auth via wallet
+    // Require creator auth via wallet (mandatory)
     const body = await request.json().catch(() => ({}));
     const { requester_wallet } = body as { requester_wallet?: string };
-
-    if (requester_wallet) {
-      const { data: creator } = await supabase
-        .from("users")
-        .select("wallet_address")
-        .eq("id", contract.creator_id)
-        .single();
-
-      if (!creator || creator.wallet_address !== requester_wallet) {
-        return NextResponse.json(
-          { error: "Only contract creator can distribute payouts" },
-          { status: 403 }
-        );
-      }
+    if (!requester_wallet) {
+      return NextResponse.json({ error: "requester_wallet required" }, { status: 400 });
     }
+    const { data: creator } = await supabase
+      .from("users")
+      .select("wallet_address")
+      .eq("id", contract.creator_id)
+      .single();
+    if (!creator || creator.wallet_address !== requester_wallet) {
+      return NextResponse.json(
+        { error: "Only contract creator can distribute payouts" },
+        { status: 403 }
+      );
+    }
+
+    // Server-side funding guard: finalized SOL deposits minus committed payouts
+    const { data: dep } = await supabase
+      .from("deposits")
+      .select("ui_amount")
+      .eq("contract_id", contractId)
+      .eq("status", "finalized")
+      .eq("asset_key", "SOL");
+    const funded = (dep || []).reduce((s, r: any) => s + Number(r.ui_amount || 0), 0);
+    const { data: outs } = await supabase
+      .from("payouts")
+      .select("amount, status")
+      .eq("contract_id", contractId)
+      .in("status", ["pending", "processing", "completed", "paid"]);
+    const committed = (outs || []).reduce((s, r: any) => s + Number(r.amount || 0), 0);
+    const available = funded - committed;
 
     // Strategy 1: Aggregate from earnings table (pending amounts)
     const { data: pendingEarnings, error: earningsError } = await supabase

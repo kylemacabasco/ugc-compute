@@ -11,9 +11,10 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("deposits")
-      .select("ui_amount, status")
+      .select("ui_amount, status, asset_key")
       .eq("contract_id", contractId)
-      .eq("status", "finalized");
+      .eq("status", "finalized")
+      .eq("asset_key", "SOL");
 
     if (error) {
       return NextResponse.json({ error: "Failed to fetch deposits" }, { status: 500 });
