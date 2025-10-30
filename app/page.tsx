@@ -140,23 +140,25 @@ export default function HomePage() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : contracts.length === 0 ? (
+        ) : contracts.filter((contract) => contract.status === "open").length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-12 text-center">
-            <p className="text-slate-600 dark:text-slate-400 mb-4">No contracts yet</p>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">No open contracts available</p>
             {user && (
               <Link
                 href="/contracts/create"
                 className="text-blue-600 dark:text-blue-400 hover:underline"
               >
-                Create the first one →
+                Create a new contract →
               </Link>
             )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {contracts.map((contract) => (
-              <ContractCard key={contract.id} contract={contract} />
-            ))}
+            {contracts
+              .filter((contract) => contract.status === "open")
+              .map((contract) => (
+                <ContractCard key={contract.id} contract={contract} />
+              ))}
           </div>
         )}
       </main>
