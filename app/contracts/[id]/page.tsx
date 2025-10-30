@@ -238,15 +238,13 @@ export default function ContractDetailPage() {
                       ? "This contract needs to be funded before it can accept submissions. Fund it now to make it active."
                       : "This contract is not yet funded and cannot accept submissions."}
                   </p>
-                  {user &&
-                    contract.creator?.wallet_address === user.wallet_address &&
-                    contract.status === "awaiting_funding" && (
-                      <Link
-                        href={`/contracts/${contract.id}/fund`}
-                        className="inline-block px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 transition-colors"
-                      >
-                        Fund Contract Now
-                      </Link>
+                  {canDelete && (
+                    <Link
+                      href={`/contracts/${contract.id}/fund`}
+                      className="inline-block px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 transition-colors"
+                    >
+                      Fund Contract Now
+                    </Link>
                   )}
                 </div>
               </div>
